@@ -50,6 +50,9 @@ Thumbs.db
 # SQL dumps (backups locales, no subir)
 *.sql
 
+# Datos sensibles de clientes (no subir a repos públicos)
+ORDENES_CONSOLIDADAS_FINAL.xlsx
+
 # Local testing
 .pytest_cache/
 .mypy_cache/
