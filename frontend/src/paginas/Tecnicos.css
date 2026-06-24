@@ -1,0 +1,18 @@
+.tecnicos-pagina { padding: 0 32px 32px; }
+.tecnicos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.tecnico-card {
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio); padding: 24px; text-align: center;
+  transition: all var(--transicion-rapida);
+}
+.tecnico-card:hover { transform: translateY(-2px); box-shadow: var(--sombra-md); }
+.tecnico-card__avatar {
+  width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 12px;
+  background: var(--color-primario); color: var(--texto-sobre-primario);
+  display: flex; align-items: center; justify-content: center;
+  font-size: var(--fuente-tamano-lg); font-weight: 700;
+}
+.tecnico-card h4 { font-size: var(--fuente-tamano-md); font-weight: 600; margin-bottom: 4px; }
+.tecnico-card__esp { font-size: var(--fuente-tamano-sm); color: var(--color-primario-hover); font-weight: 500; margin-bottom: 8px; }
+.tecnico-card p { font-size: var(--fuente-tamano-sm); color: var(--texto-secundario); margin-bottom: 4px; }
+.tecnico-card__acciones { display: flex; justify-content: center; gap: 8px; margin-top: 16px; }

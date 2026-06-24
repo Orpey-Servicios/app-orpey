@@ -1,0 +1,3 @@
+- no crear orden de servicio al ejecutrar el boton crear orden [debe enviar un mensaje de que la orden ha sido creada, mostrar la orden para para poder enviarla en pdf ya se en correo electronico o whatsapp me]
+- En crear nueva orden de servicio ya tiene la opcion buscar el cliente, pero debe tener el formulario para crear tambien un nuevo cliente desde ahi
+

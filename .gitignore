@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+.venv2/
+venv/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build
+frontend/dist/
+
+# Logs
+*.log
+backend_error.log
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# OpenCode config
+.opencode/
+.agents/
+
+# SQL dumps (backups locales, no subir)
+*.sql
+
+# Local testing
+.pytest_cache/
+.mypy_cache/

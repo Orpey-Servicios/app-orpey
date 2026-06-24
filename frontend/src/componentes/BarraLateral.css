@@ -1,0 +1,250 @@
+/*
+ * ============================================================
+ * ESTILOS: Barra Lateral (Sidebar)
+ * ============================================================
+ *
+ * Estos estilos controlan la apariencia del menú lateral.
+ * Usamos el fondo oscuro de la paleta de Orpey (#353534).
+ * ============================================================
+ */
+
+/* Contenedor principal del sidebar */
+.barra-lateral {
+  /* Posición fija: siempre visible sin importar el scroll */
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-ancho); /* 260px definido en index.css */
+
+  /* Fondo oscuro con efecto de profundidad */
+  background: var(--color-oscuro);
+
+  /* Flex vertical para distribuir logo, menú y footer */
+  display: flex;
+  flex-direction: column;
+
+  /* El sidebar debe estar "encima" del contenido */
+  z-index: 100;
+
+  /* Transición suave al cambiar de ancho (para futuro responsive) */
+  transition: width var(--transicion-normal);
+}
+
+/* --- Logo --- */
+.barra-lateral__logo {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.barra-lateral__logo-img {
+  width: 100%;
+  max-width: 160px;
+  height: auto;
+  object-fit: contain;
+  transition: transform var(--transicion-normal);
+}
+
+.barra-lateral__logo-img:hover {
+  transform: scale(1.05);
+}
+
+.barra-lateral__logo-texto {
+  display: flex;
+  flex-direction: column;
+}
+
+.barra-lateral__nombre {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--color-primario);     /* Amarillo dorado */
+  letter-spacing: 1.5px;
+  line-height: 1.2;
+}
+
+.barra-lateral__subtitulo {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5); /* Blanco semitransparente */
+  font-weight: 400;
+  letter-spacing: 0.5px;
+}
+
+/* --- Navegación --- */
+.barra-lateral__nav {
+  flex: 1;                          /* Ocupa todo el espacio disponible */
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;                 /* Scroll si hay muchos items */
+}
+
+/* Cada link de navegación */
+.barra-lateral__link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-radius: var(--borde-radio-sm);
+  color: rgba(255, 255, 255, 0.6);  /* Blanco semitransparente */
+  font-size: var(--fuente-tamano-base);
+  font-weight: 450;
+  transition: all var(--transicion-rapida);
+  position: relative;                /* Para posicionar el indicador */
+  text-decoration: none;
+}
+
+/* Hover: cuando el cursor pasa por encima del link */
+.barra-lateral__link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Link activo: la página en la que estamos */
+.barra-lateral__link--activo {
+  background: rgba(251, 195, 5, 0.12); /* Fondo amarillo muy sutil */
+  color: var(--color-primario);          /* Texto amarillo */
+  font-weight: 600;
+}
+
+.barra-lateral__link--activo:hover {
+  background: rgba(251, 195, 5, 0.18);
+}
+
+/* Indicador activo (barrita amarilla a la izquierda) */
+.barra-lateral__indicador {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  background: var(--color-primario);
+  border-radius: 0 3px 3px 0;
+}
+
+/* --- Menú desplegable (submenú) --- */
+.barra-lateral__grupo {
+  display: flex;
+  flex-direction: column;
+}
+
+.barra-lateral__link--padre {
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  cursor: pointer;
+  justify-content: flex-start;
+}
+
+.barra-lateral__chevron {
+  margin-left: auto;
+  transition: transform 0.25s ease;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.barra-lateral__chevron--abierto {
+  transform: rotate(180deg);
+  opacity: 0.8;
+}
+
+.barra-lateral__submenu {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.25s ease;
+  opacity: 0;
+  margin-left: 12px;
+  border-left: 2px solid rgba(255, 255, 255, 0.08);
+}
+
+.barra-lateral__submenu--abierto {
+  max-height: 200px;
+  opacity: 1;
+}
+
+.barra-lateral__link--hijo {
+  padding: 9px 14px 9px 16px;
+  font-size: 13px;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.barra-lateral__link--hijo:hover {
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.barra-lateral__link--sub-activo {
+  color: var(--color-primario) !important;
+  background: rgba(251, 195, 5, 0.1);
+  font-weight: 600;
+  border-left: 2px solid var(--color-primario);
+  margin-left: -2px;
+}
+
+/* --- Footer del sidebar --- */
+.barra-lateral__footer {
+  padding: 12px 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.barra-lateral__usuario-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  margin-bottom: 4px;
+}
+
+.barra-lateral__usuario-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--color-primario);
+  color: var(--texto-sobre-primario);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fuente-tamano-sm);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.barra-lateral__usuario-detalle {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.barra-lateral__usuario-nombre {
+  font-size: var(--fuente-tamano-sm);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barra-lateral__usuario-rol {
+  font-size: var(--fuente-tamano-xs);
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: capitalize;
+}
+
+#btn-cerrar-sesion {
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#btn-cerrar-sesion:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-error);
+}

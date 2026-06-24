@@ -1,0 +1,40 @@
+.usuarios-pagina { padding: 0 32px 32px; }
+
+.badge-rol {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--borde-radio-full);
+  font-size: var(--fuente-tamano-xs);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.badge-rol--admin { background: var(--color-primario-claro); color: var(--color-primario-hover); }
+.badge-rol--tecnico { background: var(--color-info-fondo); color: var(--color-info); }
+.badge-rol--asistente { background: var(--color-exito-fondo); color: var(--color-exito); }
+
+.badge-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--borde-radio-full);
+  font-size: var(--fuente-tamano-xs);
+  font-weight: 600;
+}
+
+.badge-estado--activo { background: var(--color-exito-fondo); color: var(--color-exito); }
+.badge-estado--inactivo { background: var(--color-error-fondo); color: var(--color-error); }
+
+.badge-estado__punto {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+form .campo-texto[type="password"] {
+  font-family: var(--fuente-principal);
+}

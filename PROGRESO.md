@@ -1,0 +1,426 @@
+# Registro de Progreso - Orpey Servicios
+
+## 📅 Sesión: 5 de Mayo 2026
+
+### FASE 3.5: Configuración de Passwords ✅ COMPLETADA
+
+**Fecha:** 5 de Mayo 2026
+
+**Lo que se hizo:**
+1. Verificamos que los usuarios `admin` y `asistente` tenían passwords pendientes (hash_pendiente)
+2. Usamos el endpoint `POST /api/auth/configurar-password` para establecer las contraseñas:
+   - Usuario `admin` (ID: 1) → password: `admin123`
+   - Usuario `asistente` (ID: 2) → password: `asistente123`
+3. Las contraseñas se hashearon con **bcrypt** (seguro,不可逆)
+4. Verificamos el login exitoso con ambas cuentas
+
+**Comandos ejecutados:**
+```bash
+# Configurar password admin
+curl -X POST "http://127.0.0.1:8000/api/auth/configurar-password?usuario_id=1&password_nuevo=admin123"
+
+# Configurar password asistente
+curl -X POST "http://127.0.0.1:8000/api/auth/configurar-password?usuario_id=2&password_nuevo=asistente123"
+
+# Probar login
+curl -X POST "http://127.0.0.1:8000/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+**Estado:** Sistema listo para autenticación completa ✅
+
+---
+
+## 📅 Sesión: 4 de Mayo 2026
+
+### FASE 1: Base de Datos ✅ COMPLETADA
+
+**Archivo principal:** `schema_completo.sql`
+
+**Lo que se hizo:**
+- Diseñé el esquema completo de PostgreSQL con 7 tablas:
+  1. `clientes` - Información de clientes (nombre, apellido, teléfono, email, cédula/RUC)
+  2. `tecnicos` - Registro de técnicos
+  3. `ordenes_servicio` - Tabla principal (con número auto-generado ORP-0001)
+  4. `cotizaciones` - Presupuestos para clientes
+  5. `notas_venta` - Facturación simple
+  6. `usuarios` - Gestión de acceso
+  7. `configuracion_sistema` - Datos del negocio, términos
+
+- Se crearon 4 ENUMs: tipo_equipo, estado_orden, estado_cotizacion, rol_usuario
+- Triggers para auto-generar números (ORP-0001, COT-0001, NV-0001)
+- Trigger para actualizar `updated_at` automáticamente
+- Columna calculada `por_cancelar` (total_orden - abono)
+- Vista `vista_dashboard` para estadísticas
+- 25 clientes importados del backup anterior
+- Datos iniciales: 2 usuarios, 1 técnico, configuración del negocio
+
+**Estado:** Ejecutado exitosamente en PostgreSQL
+
+---
+
+### FASE 2: Backend con FastAPI ✅ COMPLETADA
+
+**Directorio:** `backend/`
+
+**Lo que se hizo:**
+
+1. **Estructura del proyecto:**
+   ```
+   backend/
+   ├── .env                     # Variables de entorno
+   ├── pyproject.toml           # Dependencias
+   ├── run.sh                   # Script para ejecutar
+   └── src/
+       ├── main.py              # Punto de entrada
+       ├── config/database.py   # Conexión a PostgreSQL
+       ├── models/models.py     # Modelos SQLAlchemy (7 tablas)
+       ├── schemas/schemas.py   # Schemas Pydantic (validación)
+       └── routers/
+           ├── clientes.py      # CRUD clientes
+           ├── ordenes.py       # CRUD órdenes + dashboard
+           ├── tecnicos.py      # CRUD técnicos
+           └── cotizaciones.py  # CRUD cotizaciones
+   ```
+
+2. **Endpoints CRUD completos** para clientes, órdenes, técnicos y cotizaciones
+3. **Características:** Documentación Swagger, validación Pydantic, búsqueda, filtros
+4. **Dependencias:** fastapi, uvicorn, sqlalchemy, asyncpg, pydantic
+
+**Estado:** Completado
+
+---
+
+### FASE 3: Features Avanzados ✅ COMPLETADA
+
+**Fecha:** 4 de Mayo 2026
+
+#### 1. Generación de PDFs 📄
+**Archivo:** `src/services/pdf_generator.py`
+
+- PDF profesional para órdenes de servicio con:
+  - Logo de Orpey Servicios (estilizado con ReportLab)
+  - Colores corporativos (azul oscuro, azul medio, azul claro)
+  - Datos completos del cliente
+  - Datos del equipo (tipo, marca, modelo)
+  - Diagnóstico y trabajo a realizar
+  - Tabla financiera (total, abono, por cancelar)
+  - Términos y condiciones
+  - Pie de página con fecha de generación
+
+- PDF para notas de venta con:
+  - Logo y datos del negocio
+  - Datos del cliente
+  - Detalle del servicio
+  - Totales (subtotal, IVA 15%, total)
+
+**Librería:** ReportLab 4.5.0
+
+#### 2. Integración WhatsApp 💬
+**Archivo:** `src/services/whatsapp.py`
+
+- Genera links `wa.me` para enviar mensajes por WhatsApp
+- No usa API de WhatsApp Business (no cuesta dinero)
+- Mensajes prellenados con datos de la orden/cotización
+- El usuario adjunta el PDF descargado manualmente
+- Soporta teléfonos ecuatorianos (agrega +593 automáticamente)
+
+**Flujo:**
+1. Frontend pide link WhatsApp → `GET /api/reportes/orden/{id}/whatsapp`
+2. Backend devuelve: `{"link": "https://wa.me/593...", "mensaje": "Hola..."}`
+3. Frontend abre el link → WhatsApp Web se abre con mensaje prellenado
+4. Usuario adjunta PDF descargado y envía
+
+#### 3. Autenticación JWT 🔐
+**Archivo:** `src/utils/auth.py`
+
+- Login con username + password → token JWT
+- Token válido por 24 horas
+- Hashing de contraseñas con bcrypt
+- Endpoint para verificar token (`/api/auth/me`)
+- Endpoint para configurar passwords iniciales
+
+**Librerías:** python-jose, passlib[bcrypt]
+
+#### 4. Notas de Venta 🧾
+**Archivo:** `src/routers/notas_venta.py`
+
+- Crea nota de venta a partir de una orden
+- Calcula automáticamente subtotal, IVA (15%) y total
+- Genera PDF descargable
+- Número auto-generado (NV-0001, NV-0002...)
+
+#### 5. Router de Reportes 📊
+**Archivo:** `src/routers/reportes.py`
+
+- `GET /api/reportes/orden/{id}/pdf` → Descarga PDF de orden
+- `GET /api/reportes/orden/{id}/whatsapp` → Link WhatsApp para orden
+- `GET /api/reportes/cotizacion/{id}/whatsapp` → Link WhatsApp para cotización
+
+#### Nuevos archivos creados en Fase 3:
+| Archivo | Líneas | Descripción |
+|---------|--------|-------------|
+| `src/services/pdf_generator.py` | 529 | Generador de PDFs con ReportLab |
+| `src/services/whatsapp.py` | 95 | Servicio de WhatsApp (wa.me links) |
+| `src/utils/auth.py` | 95 | Autenticación JWT + bcrypt |
+| `src/routers/reportes.py` | 180 | Router de reportes (PDF + WhatsApp) |
+| `src/routers/notas_venta.py` | 150 | Router de notas de venta |
+| `src/routers/auth.py` | 140 | Router de autenticación |
+
+**Version:** 0.2.0
+
+---
+
+### FASE 4: Frontend con React + Vite ✅ COMPLETADA
+
+**Fecha:** 5 de Mayo 2026
+**Herramienta:** Antigravity (AI de Google DeepMind)
+**Directorio:** `frontend/`
+
+#### Lo que se hizo:
+
+1. **Proyecto inicializado** con Vite + React (JavaScript, sin TypeScript)
+2. **27 archivos** creados con código comentado en español
+3. **Sistema de diseño completo** con paleta de colores de Orpey
+4. **7 módulos funcionales** conectados a la API del backend
+5. **Bug corregido** en el backend: orden de rutas en `ordenes.py`
+
+#### Estructura del frontend:
+```
+frontend/
+├── public/
+│   └── logo-orpey.png              # Logo de la empresa
+├── src/
+│   ├── main.jsx                    # Punto de entrada de React
+│   ├── App.jsx                     # Rutas y layout principal
+│   ├── index.css                   # 🎨 Sistema de diseño completo
+│   ├── api/
+│   │   └── orpey-api.js            # 🔌 Todas las funciones de API
+│   ├── componentes/
+│   │   ├── BarraLateral.jsx/css    # Sidebar con navegación
+│   │   ├── Encabezado.jsx/css      # Header con título y buscador
+│   │   └── BadgeEstado.jsx/css     # Etiqueta de estado con colores
+│   └── paginas/
+│       ├── Dashboard.jsx/css       # Estadísticas generales
+│       ├── Ordenes.jsx/css         # Listado con filtros
+│       ├── OrdenFormulario.jsx/css # Crear/editar (autocomplete)
+│       ├── OrdenDetalle.jsx/css    # Vista detallada + acciones
+│       ├── Clientes.jsx/css        # Listado + modal CRUD
+│       ├── ClienteDetalle.jsx/css  # Ficha + historial
+│       ├── Tecnicos.jsx/css        # Cards + modal CRUD
+│       ├── Cotizaciones.jsx/css    # Tabla + aprobar
+│       └── NotasVenta.jsx/css      # Listado + descarga PDF
+├── index.html                      # HTML con SEO
+├── package.json                    # Dependencias
+└── vite.config.js                  # Config de Vite
+```
+
+#### Tecnologías usadas:
+| Librería | Versión | Para qué |
+|----------|---------|----------|
+| React | 18.x | Componentes de interfaz |
+| React Router DOM | 7.x | Navegación SPA (sin recargar) |
+| Lucide React | latest | Iconos modernos |
+| Vite | 5.4.21 | Bundler y dev server |
+| Google Fonts (Inter) | — | Tipografía profesional |
+| Vanilla CSS | — | Estilos (sin frameworks) |
+
+#### Diseño implementado:
+| Elemento | Detalle |
+|----------|---------|
+| Color primario | `#FBC305` (Amarillo dorado de Orpey) |
+| Color oscuro | `#353534` (Gris oscuro, sidebar) |
+| Color claro | `#E5E4DE` (Gris claro, fondos) |
+| Tipografía | Inter (Google Fonts) |
+| Iconos | Lucide React |
+| Animaciones | Entrada suave, hover, transiciones |
+| Layout | Sidebar fijo + Header sticky + Contenido dinámico |
+
+#### Funcionalidades completadas:
+
+**Dashboard (`/`)**
+- 7 tarjetas con estadísticas del backend (órdenes, PCs, laptops, etc.)
+- Tabla de últimas 5 órdenes recientes
+- Botón rápido "Nueva Orden de Servicio"
+- Animaciones de entrada escalonadas
+
+**Órdenes (`/ordenes`)**
+- Tabla con todas las órdenes
+- 3 filtros: estado, tipo de equipo, búsqueda de texto
+- Badges de colores por estado
+- Cálculo de "por cancelar" visible
+
+**Nueva Orden (`/ordenes/nueva`)**
+- Autocomplete de clientes (busca por nombre, teléfono, cédula)
+- Selector visual de tipo de equipo con emojis
+- Todos los campos: marca, modelo, serial, problema, diagnóstico
+- Cálculo automático: Por Cancelar = Total - Abono
+- Selector de técnico y garantía
+
+**Detalle de Orden (`/ordenes/:id`)**
+- Tarjetas: cliente, equipo, financiero, información
+- Cambio de estado con botones interactivos
+- Botones: Descargar PDF, WhatsApp, Nota de Venta, Editar, Eliminar
+
+**Clientes (`/clientes`)**
+- Tabla con búsqueda por nombre/teléfono/cédula
+- Modal para crear/editar cliente
+- Desactivación lógica (no se borran)
+
+**Ficha de Cliente (`/clientes/:id`)**
+- Datos de contacto e identificación
+- Historial completo de órdenes
+- Botones: WhatsApp directo, Email, Nueva Orden
+
+**Técnicos (`/tecnicos`)**
+- Cards con avatar (iniciales), especialidad, contacto
+- Modal para crear/editar
+
+**Cotizaciones (`/cotizaciones`)**
+- Tabla con filtro por estado
+- Botón "Aprobar" para cotizaciones abiertas
+- Enviar por WhatsApp
+
+**Notas de Venta (`/notas-venta`)**
+- Listado con subtotal, IVA (15%), total
+- Descarga de PDF por cada nota
+
+#### API Client (`orpey-api.js`):
+Cubre TODOS los 25+ endpoints del backend:
+- Clientes: CRUD completo + búsqueda
+- Órdenes: CRUD + dashboard + filtros
+- Técnicos: CRUD completo
+- Cotizaciones: CRUD + aprobar
+- Notas de Venta: crear + listar
+- Reportes: PDF download + WhatsApp links
+- Auth: login + verificar token
+
+#### Bug corregido en el backend:
+**Archivo:** `backend/src/routers/ordenes.py`
+- **Problema:** La ruta `/dashboard` estaba definida DESPUÉS de `/{orden_id}`
+- **Efecto:** FastAPI interpretaba "dashboard" como un ID (error 422)
+- **Solución:** Movimos `/dashboard` ANTES de `/{orden_id}`
+- **Lección:** En FastAPI, las rutas específicas siempre van antes que las parametrizadas
+
+#### Archivos creados en Fase 4:
+| Archivo | Líneas | Descripción |
+|---------|--------|-------------|
+| `src/index.css` | 395 | Sistema de diseño global (colores, tipografía, animaciones) |
+| `src/api/orpey-api.js` | 389 | Cliente API completo (25+ funciones) |
+| `src/App.jsx` | 101 | Rutas y layout principal |
+| `src/main.jsx` | 26 | Punto de entrada |
+| `src/componentes/BarraLateral.jsx` | 113 | Sidebar de navegación |
+| `src/componentes/BarraLateral.css` | 107 | Estilos del sidebar |
+| `src/componentes/Encabezado.jsx` | 54 | Header superior |
+| `src/componentes/Encabezado.css` | 79 | Estilos del header |
+| `src/componentes/BadgeEstado.jsx` | 33 | Etiquetas de estado |
+| `src/componentes/BadgeEstado.css` | 24 | Estilos de badges |
+| `src/paginas/Dashboard.jsx` | 119 | Pantalla principal |
+| `src/paginas/Dashboard.css` | 65 | Estilos del dashboard |
+| `src/paginas/Ordenes.jsx` | 112 | Listado de órdenes |
+| `src/paginas/OrdenFormulario.jsx` | 195 | Formulario crear/editar orden |
+| `src/paginas/OrdenDetalle.jsx` | 160 | Vista detallada de orden |
+| `src/paginas/Clientes.jsx` | 157 | Gestión de clientes |
+| `src/paginas/ClienteDetalle.jsx` | 98 | Ficha de cliente |
+| `src/paginas/Tecnicos.jsx` | 104 | Gestión de técnicos |
+| `src/paginas/Cotizaciones.jsx` | 82 | Gestión de cotizaciones |
+| `src/paginas/NotasVenta.jsx` | 54 | Notas de venta |
+| + 8 archivos CSS | — | Estilos de cada página |
+
+**Versión Frontend:** 1.0.0
+
+---
+
+### PENDIENTE - FASE 4.5: Pulir Frontend
+
+- [ ] Pantalla de Login (interfaz gráfica - la lógica JWT ya existe)
+- [ ] Protección de rutas (redirigir a login si no hay token)
+- [ ] Responsive design (optimizar para móvil/tablet)
+- [ ] Buscador global funcional (del encabezado)
+- [ ] Notificaciones en tiempo real
+- [ ] Página de Configuración del sistema
+- [ ] Mejorar la tabla de órdenes con paginación
+- [ ] Agregar confirmaciones visuales (toasts) en vez de alert()
+
+### PENDIENTE - FASE 5: Deploy
+
+- [ ] Docker (frontend + backend)
+- [ ] Nginx como proxy reverso
+- [ ] Restringir CORS al dominio del frontend
+- [ ] Backup automático de PostgreSQL
+- [ ] SSL/HTTPS
+- [ ] Producción
+
+---
+
+## 📝 Notas Importantes
+
+1. **Base de datos:** Ya tiene datos reales (25 clientes del backup anterior)
+2. **Usuarios iniciales:** Admin (Daniel) y Asistente (Sofía) - passwords configurados ✅
+   - admin: `admin123`
+   - asistente: `asistente123`
+3. **Swagger UI:** Disponible en http://127.0.0.1:8000/docs cuando se ejecuta el backend
+4. **Documentación completa del backend:** Ver `backend/Guia_Backend.md`
+5. **Guía rápida:** Ver `backend/README.md`
+6. **Python versión:** 3.12 (funciona perfecto)
+7. **Node versión:** 18.19.1 (funciona con Vite 5)
+8. **Conexión a BD:** Por socket Unix `/var/run/postgresql` (peer authentication)
+9. **WhatsApp:** Se usa wa.me (gratis, sin API de Meta)
+10. **PDFs:** Se generan con ReportLab, se descargan directamente
+11. **Frontend comentado:** Todo el código tiene comentarios en español para aprendizaje
+
+---
+
+## 🔧 Comandos útiles
+
+### Ejecutar el backend:
+```bash
+cd ~/app-orpey/backend
+./run.sh
+```
+
+### Ejecutar el frontend:
+```bash
+cd ~/app-orpey/frontend
+npm run dev
+```
+
+### URLs en desarrollo:
+| Servicio | URL |
+|----------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://127.0.0.1:8000 |
+| Swagger (docs API) | http://127.0.0.1:8000/docs |
+
+### Acceder a la documentación:
+http://127.0.0.1:8000/docs
+
+### Probar la API:
+```bash
+# Crear cliente
+curl -X POST http://127.0.0.1:8000/api/clientes \
+  -H "Content-Type: application/json" \
+  -d '{"nombre":"Juan","apellido":"Perez","telefono":"0987654321","cedula_ruc":"0999999999"}'
+
+# Descargar PDF de orden
+curl -o orden.pdf http://127.0.0.1:8000/api/reportes/orden/1/pdf
+
+# Generar link WhatsApp
+curl http://127.0.0.1:8000/api/reportes/orden/1/whatsapp
+
+# Login
+curl -X POST http://127.0.0.1:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"admin","password":"admin123"}'
+```
+
+### Conectar a PostgreSQL:
+```bash
+psql -U skorggamor -d orpey_db
+```
+
+---
+
+*Última actualización: 5 de Mayo 2026 — Sesión Antigravity (Frontend)*
+

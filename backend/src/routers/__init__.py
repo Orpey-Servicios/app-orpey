@@ -1,0 +1,10 @@
+from .clientes import router as clientes_router
+from .ordenes import router as ordenes_router
+from .tecnicos import router as tecnicos_router
+from .cotizaciones import router as cotizaciones_router
+from .reportes import router as reportes_router
+from .notas_venta import router as notas_venta_router
+from .auth import router as auth_router
+from .pagos import router as pagos_router
+from .notas import router as notas_router
+from .usuarios import router as usuarios_router

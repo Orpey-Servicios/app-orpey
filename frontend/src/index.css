@@ -1,0 +1,399 @@
+/*
+ * ============================================================
+ * SISTEMA DE DISEÑO GLOBAL - Orpey Servicios
+ * ============================================================
+ *
+ * Este archivo define TODOS los estilos base del sistema:
+ * - Variables CSS (colores, tipografía, espaciado)
+ * - Reset de estilos del navegador
+ * - Estilos globales
+ *
+ * ¿Qué son las Variables CSS?
+ * Son "contenedores" de valores que se pueden reutilizar.
+ * Se definen con --nombre y se usan con var(--nombre).
+ * Ejemplo: --color-primario: #FBC305; → color: var(--color-primario);
+ * ============================================================
+ */
+
+/* Importar la fuente Inter de Google Fonts (tipografía moderna y profesional) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+/* ============================================================
+   VARIABLES CSS - Paleta de colores de Orpey
+   :root significa "la raíz del documento", es decir, todo el HTML
+   ============================================================ */
+:root {
+  /* --- Colores principales de la marca --- */
+  --color-primario: #FBC305;          /* Amarillo/Dorado - botones principales, acentos */
+  --color-primario-hover: #E5B200;    /* Amarillo más oscuro - cuando el cursor pasa por encima */
+  --color-primario-claro: #FFF3CC;    /* Amarillo muy suave - fondos destacados */
+  --color-primario-sutil: rgba(251, 195, 5, 0.1); /* Amarillo transparente */
+
+  --color-oscuro: #353534;            /* Gris oscuro - sidebar, textos principales */
+  --color-oscuro-claro: #454544;      /* Gris un poco más claro - hover en sidebar */
+  --color-gris-claro: #E5E4DE;        /* Gris claro - fondos de tarjetas, bordes */
+  --color-gris-medio: #949494;        /* Gris medio - textos secundarios, iconos */
+
+  /* --- Colores del sistema (para estados, alertas, etc.) --- */
+  --color-exito: #22C55E;             /* Verde - éxito, completado */
+  --color-exito-fondo: #F0FDF4;       /* Verde muy suave - fondo de éxito */
+  --color-advertencia: #F59E0B;       /* Naranja - advertencia */
+  --color-advertencia-fondo: #FFFBEB; /* Naranja suave - fondo de advertencia */
+  --color-error: #EF4444;             /* Rojo - error, eliminar */
+  --color-error-fondo: #FEF2F2;       /* Rojo suave - fondo de error */
+  --color-info: #3B82F6;              /* Azul - información */
+  --color-info-fondo: #EFF6FF;        /* Azul suave - fondo de información */
+
+  /* --- Colores de fondo --- */
+  --fondo-principal: #F8F8F6;          /* Fondo de la app (casi blanco con tono cálido) */
+  --fondo-tarjeta: #FFFFFF;            /* Fondo de tarjetas */
+  --fondo-sidebar: #353534;            /* Fondo del sidebar (gris oscuro de marca) */
+  --fondo-input: #FFFFFF;              /* Fondo de inputs */
+
+  /* --- Colores de texto --- */
+  --texto-principal: #1F2937;          /* Texto principal (casi negro) */
+  --texto-secundario: #6B7280;         /* Texto secundario (gris) */
+  --texto-terciario: #9CA3AF;          /* Texto terciario (gris claro) */
+  --texto-blanco: #FFFFFF;             /* Texto blanco (sobre fondos oscuros) */
+  --texto-sobre-primario: #353534;     /* Texto sobre color primario (amarillo) */
+
+  /* --- Bordes --- */
+  --borde-color: #E5E7EB;             /* Color de bordes generales */
+  --borde-color-hover: #D1D5DB;       /* Borde al hacer hover */
+  --borde-radio: 12px;                /* Radio de esquinas redondeadas */
+  --borde-radio-sm: 8px;              /* Radio pequeño */
+  --borde-radio-lg: 16px;             /* Radio grande */
+  --borde-radio-full: 9999px;         /* Completamente redondo (para badges) */
+
+  /* --- Sombras --- */
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sombra-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --sombra-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  --sombra-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+
+  /* --- Espaciado (usamos múltiplos de 4px para consistencia) --- */
+  --espacio-xs: 4px;
+  --espacio-sm: 8px;
+  --espacio-md: 16px;
+  --espacio-lg: 24px;
+  --espacio-xl: 32px;
+  --espacio-2xl: 48px;
+
+  /* --- Tipografía --- */
+  --fuente-principal: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --fuente-tamano-xs: 0.75rem;    /* 12px */
+  --fuente-tamano-sm: 0.8125rem;  /* 13px */
+  --fuente-tamano-base: 0.875rem; /* 14px */
+  --fuente-tamano-md: 1rem;       /* 16px */
+  --fuente-tamano-lg: 1.125rem;   /* 18px */
+  --fuente-tamano-xl: 1.25rem;    /* 20px */
+  --fuente-tamano-2xl: 1.5rem;    /* 24px */
+  --fuente-tamano-3xl: 1.875rem;  /* 30px */
+
+  /* --- Transiciones (animaciones suaves) --- */
+  --transicion-rapida: 150ms ease;
+  --transicion-normal: 250ms ease;
+  --transicion-lenta: 350ms ease;
+
+  /* --- Layout --- */
+  --sidebar-ancho: 260px;             /* Ancho del sidebar */
+  --sidebar-ancho-colapsado: 72px;    /* Sidebar colapsado (solo iconos) */
+  --encabezado-alto: 64px;            /* Alto del header */
+}
+
+/* ============================================================
+   RESET - Normalizar estilos del navegador
+   Cada navegador tiene estilos por defecto diferentes.
+   El reset asegura que todos se vean igual.
+   ============================================================ */
+
+/* box-sizing: border-box hace que el padding y border
+   se incluyan dentro del ancho/alto del elemento */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* Estilos base del HTML */
+html {
+  font-size: 16px;              /* Base para cálculos rem */
+  -webkit-font-smoothing: antialiased;  /* Texto más suave en Chrome/Safari */
+  -moz-osx-font-smoothing: grayscale;   /* Texto más suave en Firefox */
+}
+
+/* Estilos base del body */
+body {
+  font-family: var(--fuente-principal);
+  font-size: var(--fuente-tamano-base);
+  color: var(--texto-principal);
+  background-color: var(--fondo-principal);
+  line-height: 1.6;            /* Altura de línea cómoda para leer */
+  min-height: 100vh;           /* Mínimo 100% de la pantalla visible */
+}
+
+/* ============================================================
+   ESTILOS GLOBALES
+   ============================================================ */
+
+/* Links sin subrayado por defecto */
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Imágenes responsivas (nunca más anchas que su contenedor) */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Listas sin bullets */
+ul, ol {
+  list-style: none;
+}
+
+/* Inputs y botones heredan la fuente */
+input, button, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Botones sin estilo por defecto */
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+}
+
+/* ============================================================
+   CLASES UTILITARIAS
+   Clases CSS reutilizables para tareas comunes.
+   Se aplican directamente en el HTML: <div class="flex-centro">
+   ============================================================ */
+
+/* --- Flexbox (para distribuir elementos) --- */
+.flex { display: flex; }
+.flex-centro { display: flex; align-items: center; justify-content: center; }
+.flex-entre { display: flex; align-items: center; justify-content: space-between; }
+.flex-columna { display: flex; flex-direction: column; }
+.flex-gap-sm { gap: var(--espacio-sm); }
+.flex-gap-md { gap: var(--espacio-md); }
+
+/* --- Scroll personalizado (barras de scroll más bonitas) --- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-gris-medio);
+  border-radius: var(--borde-radio-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-oscuro);
+}
+
+/* ============================================================
+   COMPONENTES BASE
+   Estilos para elementos de formulario comunes
+   ============================================================ */
+
+/* Estilo para campos de texto (input, select, textarea) */
+.campo-texto {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1.5px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm);
+  background: var(--fondo-input);
+  color: var(--texto-principal);
+  font-size: var(--fuente-tamano-base);
+  transition: border-color var(--transicion-rapida), box-shadow var(--transicion-rapida);
+  outline: none;
+}
+
+/* Solo permitir redimensionamiento vertical para textarea */
+textarea.campo-texto {
+  resize: vertical;
+}
+
+/* Cuando el input tiene el foco (está seleccionado) */
+.campo-texto:focus {
+  border-color: var(--color-primario);
+  box-shadow: 0 0 0 3px var(--color-primario-sutil);
+}
+
+/* Placeholder (texto de ayuda dentro del input) */
+.campo-texto::placeholder {
+  color: var(--texto-terciario);
+}
+
+/* Label (etiqueta de campo) */
+.campo-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: var(--fuente-tamano-sm);
+  font-weight: 500;
+  color: var(--texto-principal);
+}
+
+/* Grupo de campo (label + input) */
+.campo-grupo {
+  margin-bottom: var(--espacio-md);
+}
+
+/* Botón primario (color amarillo de la marca) */
+.boton-primario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--color-primario);
+  color: var(--texto-sobre-primario);
+  font-weight: 600;
+  font-size: var(--fuente-tamano-base);
+  border-radius: var(--borde-radio-sm);
+  transition: all var(--transicion-rapida);
+  border: none;
+  cursor: pointer;
+}
+
+.boton-primario:hover {
+  background: var(--color-primario-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--sombra-md);
+}
+
+.boton-primario:active {
+  transform: translateY(0);
+}
+
+/* Botón secundario (borde, sin fondo) */
+.boton-secundario {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--fondo-tarjeta);
+  color: var(--texto-principal);
+  font-weight: 500;
+  font-size: var(--fuente-tamano-base);
+  border: 1.5px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm);
+  transition: all var(--transicion-rapida);
+  cursor: pointer;
+}
+
+.boton-secundario:hover {
+  border-color: var(--borde-color-hover);
+  background: var(--fondo-principal);
+}
+
+/* Botón de peligro (rojo, para eliminar) */
+.boton-peligro {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--color-error);
+  color: white;
+  font-weight: 600;
+  font-size: var(--fuente-tamano-base);
+  border-radius: var(--borde-radio-sm);
+  transition: all var(--transicion-rapida);
+  border: none;
+  cursor: pointer;
+}
+
+.boton-peligro:hover {
+  background: #DC2626;
+  transform: translateY(-1px);
+}
+
+/* Botón icono (solo icono, sin texto) */
+.boton-icono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--borde-radio-sm);
+  color: var(--texto-secundario);
+  transition: all var(--transicion-rapida);
+  cursor: pointer;
+}
+
+.boton-icono:hover {
+  background: var(--color-gris-claro);
+  color: var(--texto-principal);
+}
+
+/* ============================================================
+   ANIMACIONES
+   ============================================================ */
+
+/* Animación de entrada (fade + slide desde abajo) */
+@keyframes entradaSuave {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Animación de pulso para indicadores de actividad */
+@keyframes pulso {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Clase para aplicar animación de entrada */
+.animar-entrada {
+  animation: entradaSuave 0.4s ease forwards;
+}
+
+/* Para retrasar animaciones escalonadas (staggered) */
+.animar-retraso-1 { animation-delay: 0.05s; opacity: 0; }
+.animar-retraso-2 { animation-delay: 0.1s; opacity: 0; }
+.animar-retraso-3 { animation-delay: 0.15s; opacity: 0; }
+.animar-retraso-4 { animation-delay: 0.2s; opacity: 0; }
+.animar-retraso-5 { animation-delay: 0.25s; opacity: 0; }
+.animar-retraso-6 { animation-delay: 0.3s; opacity: 0; }
+.animar-retraso-7 { animation-delay: 0.35s; opacity: 0; }
+.animar-retraso-8 { animation-delay: 0.4s; opacity: 0; }
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   Estructura: Sidebar fijo a la izquierda + contenido a la derecha
+   ============================================================ */
+
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* El contenido ocupa todo el espacio restante después del sidebar */
+.layout__contenido {
+  margin-left: var(--sidebar-ancho); /* Empuja el contenido a la derecha del sidebar */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Área principal donde se renderizan las páginas */
+.layout__main {
+  flex: 1;
+  padding-top: 24px;
+  overflow: visible;
+}

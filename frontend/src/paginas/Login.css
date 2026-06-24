@@ -1,0 +1,112 @@
+.login-pagina {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--color-oscuro) 0%, #1a1a1a 100%);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.login-pagina::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle at 30% 50%, rgba(251, 195, 5, 0.04) 0%, transparent 60%),
+              radial-gradient(circle at 70% 50%, rgba(251, 195, 5, 0.02) 0%, transparent 40%);
+  pointer-events: none;
+}
+
+.login-pagina::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--color-primario), transparent);
+}
+
+.login-tarjeta {
+  position: relative;
+  background: var(--fondo-tarjeta);
+  border-radius: var(--borde-radio-lg);
+  padding: 48px 40px 40px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  animation: loginIn 0.5s ease;
+}
+
+@keyframes loginIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.login-tarjeta__logo {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 32px;
+}
+
+.login-tarjeta__logo img {
+  height: 56px;
+  width: auto;
+}
+
+.login-tarjeta__titulo {
+  text-align: center;
+  font-size: var(--fuente-tamano-2xl);
+  font-weight: 700;
+  color: var(--texto-principal);
+  margin-bottom: 4px;
+}
+
+.login-tarjeta__subtitulo {
+  text-align: center;
+  font-size: var(--fuente-tamano-sm);
+  color: var(--texto-secundario);
+  margin-bottom: 32px;
+}
+
+.login-error {
+  background: var(--color-error-fondo);
+  color: var(--color-error);
+  padding: 12px 16px;
+  border-radius: var(--borde-radio-sm);
+  font-size: var(--fuente-tamano-sm);
+  font-weight: 500;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: shakeIn 0.3s ease;
+}
+
+@keyframes shakeIn {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.login-tarjeta__boton {
+  width: 100%;
+  padding: 12px 24px;
+  margin-top: 8px;
+  font-size: var(--fuente-tamano-md);
+}
+
+.login-tarjeta__footer {
+  text-align: center;
+  margin-top: 24px;
+  font-size: var(--fuente-tamano-xs);
+  color: var(--texto-terciario);
+}
+
+.login-tarjeta__footer strong {
+  color: var(--color-primario);
+}
