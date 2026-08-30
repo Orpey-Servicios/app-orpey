@@ -10,9 +10,9 @@ Hay 3 tipos de schemas por modelo:
 - XxxResponse: datos que DEVUELVE la API (incluye id, fechas, etc.)
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Literal
 from pydantic import BaseModel, Field, field_validator
 import re
 
@@ -181,6 +181,31 @@ class EquipoOrdenUpdate(BaseModel):
     repuesto_a_instalar: Optional[str] = None
     costo: Decimal = Decimal("0.00")
     estado: str = "revision"
+    # Campos de diagnóstico técnico (V3)
+    enciende: Optional[str] = None
+    tipo_disco: Optional[str] = None
+    capacidad_disco: Optional[str] = None
+    tipo_memoria: Optional[str] = None
+    capacidad_memoria: Optional[str] = None
+    slot_m2: Optional[str] = None
+    slot_caddy: Optional[str] = None
+    procesador: Optional[str] = None
+    # Campos extra (impresoras y teléfonos)
+    toma_papel: Optional[str] = None
+    nivel_tinta: Optional[str] = None
+    calidad_impresion: Optional[str] = None
+    pantalla_rota: Optional[str] = None
+    pin_carga: Optional[str] = None
+
+
+class DiagnosticoRepuestoSchema(BaseModel):
+    """Un repuesto del desglose (proveedor + repuesto + costo)."""
+    id: Optional[int] = None
+    proveedor: Optional[str] = None
+    repuesto: Optional[str] = None
+    costo: Decimal = Decimal("0.00")
+
+    model_config = {"from_attributes": True}
 
 
 class EquipoResponse(BaseModel):
@@ -200,6 +225,28 @@ class EquipoResponse(BaseModel):
     estado: str
     created_at: datetime
     updated_at: datetime
+    # Campos de diagnóstico técnico (V3)
+    enciende: Optional[str] = None
+    tipo_disco: Optional[str] = None
+    capacidad_disco: Optional[str] = None
+    tipo_memoria: Optional[str] = None
+    capacidad_memoria: Optional[str] = None
+    slot_m2: Optional[str] = None
+    slot_caddy: Optional[str] = None
+    procesador: Optional[str] = None
+    # Campos extra (impresoras y teléfonos)
+    toma_papel: Optional[str] = None
+    nivel_tinta: Optional[str] = None
+    calidad_impresion: Optional[str] = None
+    pantalla_rota: Optional[str] = None
+    pin_carga: Optional[str] = None
+    # Campos de aprobación del dueño (V3)
+    estado_aprobacion: Optional[str] = "pendiente"
+    comentario_dueño: Optional[str] = None
+    instalacion_decision: Optional[str] = None
+    precio_venta: Optional[Decimal] = None
+    # Desglose de repuestos
+    repuestos: List[DiagnosticoRepuestoSchema] = []
 
     model_config = {"from_attributes": True}
 
@@ -301,13 +348,27 @@ class OrdenConCliente(BaseModel):
 # SCHEMA: Cotizacion
 # =====================================================
 
+class CotizacionItemSchema(BaseModel):
+    descripcion: str = Field(..., min_length=1)
+    cantidad: int = 1
+    precio_unitario: Decimal = Decimal("0.00")
+    total_item: Decimal = Decimal("0.00")
+
+    model_config = {"from_attributes": True}
+
+class CotizacionItemResponse(CotizacionItemSchema):
+    id: int
+    cotizacion_id: int
+
 class CotizacionCreate(BaseModel):
     cliente_id: int
     estado: str = "abierta"
-    descripcion: str = Field(..., min_length=1)
+    descripcion: str = "Cotización General"
     total: Decimal = Decimal("0.00")
     validez_dias: int = 7
     orden_servicio_id: Optional[int] = None
+    incluye_iva: bool = False
+    items: List[CotizacionItemSchema] = []
 
 
 class CotizacionUpdate(BaseModel):
@@ -316,6 +377,8 @@ class CotizacionUpdate(BaseModel):
     total: Optional[Decimal] = None
     validez_dias: Optional[int] = None
     orden_servicio_id: Optional[int] = None
+    incluye_iva: Optional[bool] = None
+    items: Optional[List[CotizacionItemSchema]] = None
 
 
 class CotizacionResponse(BaseModel):
@@ -326,9 +389,11 @@ class CotizacionResponse(BaseModel):
     descripcion: str
     total: Decimal
     validez_dias: int
+    incluye_iva: bool = False
     fecha_creacion: datetime
     fecha_aprobacion: Optional[datetime] = None
     orden_servicio_id: Optional[int] = None
+    items: List[CotizacionItemResponse] = []
 
     model_config = {"from_attributes": True}
 
@@ -351,6 +416,62 @@ class NotaVentaResponse(BaseModel):
     subtotal: Decimal
     iva: Decimal
     total: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+# =====================================================
+# SCHEMA: FacturaElectronica (SRI)
+# =====================================================
+
+class FacturaElectronicaCreate(BaseModel):
+    """
+    Datos para generar una factura electrónica.
+    Se indica el origen: orden_servicio_id o nota_venta_id (uno de los dos).
+    Ambiente siempre "1" (pruebas) por defecto; "2" solo con override de admin.
+    """
+    orden_servicio_id: Optional[int] = None
+    nota_venta_id: Optional[int] = None
+    ambiente: str = Field("1", pattern="^[12]$")
+
+
+class NotaCreditoRequest(BaseModel):
+    """
+    Body del POST /api/facturacion/{factura_id}/anular (nota de crédito).
+
+    - motivo: texto de la anulación (obligatorio, va en <motivo> del XML).
+    - monto_anular: monto TOTAL (IVA incluido) a anular. Default = total de la
+      factura (anulación total). Si es menor, la NC es parcial.
+    - fecha_autorizada: fecha de emisión de la NC (fechaEmision). Default = hoy.
+      Debe ser >= fecha de emisión de la factura original.
+    """
+    motivo: str = Field(..., min_length=1, max_length=500, description="Motivo de la anulación")
+    monto_anular: Optional[Decimal] = Field(None, gt=0, description="Monto total a anular (IVA incluido); default = total de la factura")
+    fecha_autorizada: Optional[date] = Field(None, description="Fecha de emisión de la NC; default = hoy")
+
+
+class FacturaElectronicaResponse(BaseModel):
+    """Comprobante electrónico generado (factura 01 o nota de crédito 04)."""
+    id: int
+    orden_servicio_id: Optional[int] = None
+    nota_venta_id: Optional[int] = None
+    cliente_id: int
+    tipo_comprobante: str = "01"
+    factura_referenciada_id: Optional[int] = None
+    motivo_anulacion: Optional[str] = None
+    valor_anulacion: Optional[Decimal] = None
+    clave_acceso: str
+    numero_documento: str
+    ambiente: str
+    estado_sri: str
+    xml_respuesta_sri: Optional[str] = None
+    numero_autorizacion: Optional[str] = None
+    fecha_autorizacion: Optional[datetime] = None
+    fecha_emision: datetime
+    subtotal: Decimal
+    iva: Decimal
+    total: Decimal
+    created_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -467,3 +588,135 @@ class UsuarioResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# =====================================================
+# SCHEMA: Diagnóstico Técnico (V3)
+# =====================================================
+
+class DiagnosticoGuardar(BaseModel):
+    """
+    Cuerpo para GUARDAR el diagnóstico de un equipo.
+    Lo llena el técnico dentro de la orden.
+    """
+    enciende: Optional[str] = None
+    tipo_disco: Optional[str] = None
+    capacidad_disco: Optional[str] = None
+    tipo_memoria: Optional[str] = None
+    capacidad_memoria: Optional[str] = None
+    slot_m2: Optional[str] = None
+    slot_caddy: Optional[str] = None
+    procesador: Optional[str] = None
+    diagnostico: Optional[str] = None
+    # Campos extra (impresoras y teléfonos)
+    toma_papel: Optional[str] = None
+    nivel_tinta: Optional[str] = None
+    calidad_impresion: Optional[str] = None
+    pantalla_rota: Optional[str] = None
+    pin_carga: Optional[str] = None
+    # Desglose de repuestos (proveedor + repuesto + costo)
+    repuestos: List[DiagnosticoRepuestoSchema] = []
+
+
+class AprobarDiagnostico(BaseModel):
+    """
+    Cuerpo para que el DUEÑO apruebe un diagnóstico.
+    Incluye comentario y qué decide instalar.
+    """
+    comentario: Optional[str] = None
+    instalacion_decision: Optional[str] = None
+    precio_venta: Optional[Decimal] = None
+
+
+class RechazarDiagnostico(BaseModel):
+    """
+    Cuerpo para que el DUEÑO rechace un diagnóstico.
+    Debe indicar el motivo (comentario).
+    """
+    comentario: Optional[str] = None
+
+
+class DiagnosticoActivoResponse(BaseModel):
+    """
+    Respuesta para la sección "Diagnósticos activos" (para el dueño).
+    Incluye los datos del equipo + del cliente + de la orden,
+    para que el dueño decida sin abrir la orden completa.
+    """
+    equipo: dict
+    cliente: dict
+    orden_id: int
+    numero_orden: str
+
+
+# =====================================================
+# SCHEMA: Caja (módulo de caja / arqueo)
+# =====================================================
+
+class CajaAbrirRequest(BaseModel):
+    """Datos para abrir la caja del día."""
+    monto_inicial: Decimal = Field(Decimal("0.00"), ge=0, description="Dinero con el que se abre la caja")
+
+
+class CajaCerrarRequest(BaseModel):
+    """Datos para cerrar la caja (arqueo)."""
+    monto_contado: Decimal = Field(..., ge=0, description="Dinero físico contado al cierre")
+    nota_cierre: Optional[str] = None
+
+
+class MovimientoCajaCreate(BaseModel):
+    """
+    Datos para registrar un movimiento MANUAL en la caja.
+    El signo lo da el tipo: 'ingreso' suma, 'egreso' resta.
+    El monto siempre es positivo.
+    """
+    tipo: Literal["ingreso", "egreso"]
+    monto: Decimal = Field(..., gt=0)
+    descripcion: Optional[str] = None
+    metodo_pago: Optional[str] = None
+
+
+class CajaResponse(BaseModel):
+    """Caja con montos calculados del período (ingresos, egresos, monto en caja)."""
+    id: int
+    monto_inicial: Decimal
+    monto_cierre: Optional[Decimal] = None
+    monto_esperado: Optional[Decimal] = None
+    diferencia: Optional[Decimal] = None
+    estado: str
+    abierta_por: int
+    abierta_en: datetime
+    cerrada_por: Optional[int] = None
+    cerrada_en: Optional[datetime] = None
+    nota_cierre: Optional[str] = None
+    monto_en_caja: Optional[Decimal] = None
+    ingresos: Decimal = Decimal("0.00")
+    egresos: Decimal = Decimal("0.00")
+
+
+class MovimientoCajaResponse(BaseModel):
+    """Movimiento de caja (ingreso o egreso)."""
+    id: int
+    caja_id: int
+    tipo: str
+    origen: str
+    referencia_id: Optional[int] = None
+    monto: Decimal
+    descripcion: Optional[str] = None
+    metodo_pago: Optional[str] = None
+    creado_por: int
+    creado_en: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ResumenDiaResponse(BaseModel):
+    """Resumen financiero del día para el Dashboard."""
+    fecha: date
+    caja_abierta: Optional[CajaResponse] = None
+    ingresos_hoy: Decimal = Decimal("0.00")
+    egresos_hoy: Decimal = Decimal("0.00")
+    esperado_hoy: Decimal = Decimal("0.00")
+    facturado_hoy: Decimal = Decimal("0.00")
+    notas_venta_hoy: Decimal = Decimal("0.00")
+    pagos_hoy: Decimal = Decimal("0.00")
+    ordenes_cerradas_hoy: int = 0

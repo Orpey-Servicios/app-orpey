@@ -23,8 +23,12 @@
  */
 
 // URL base del backend - donde está corriendo FastAPI
-// En desarrollo es localhost:8000, en producción sería el dominio real
-const URL_BASE = 'http://127.0.0.1:8000';
+// En desarrollo usamos la ruta relativa '/api' que el proxy de Vite
+// (configurado en vite.config.js) reenvía al backend en 127.0.0.1:8000.
+// Esto hace que la app funcione igual desde localhost y desde la IP de red
+// (y desde cualquier dispositivo), eliminando el "flash"/desconexión que
+// ocurría al usar la URL hardcodeada http://127.0.0.1:8000.
+const URL_BASE = '';
 
 /**
  * Función auxiliar genérica para hacer peticiones al backend.
@@ -292,7 +296,7 @@ export async function obtenerCotizaciones(filtros = {}) {
   if (filtros.estado) parametros.append('estado', filtros.estado);
   if (filtros.cliente_id) parametros.append('cliente_id', filtros.cliente_id);
   const query = parametros.toString();
-  return hacerPeticion(`/api/cotizaciones${query ? '?' + query : ''}`);
+  return hacerPeticion(`/api/cotizaciones/${query ? '?' + query : ''}`);
 }
 
 /** Obtener una cotización por ID */
@@ -361,6 +365,14 @@ export function descargarPdfOrden(ordenId) {
  */
 export function descargarPdfNota(notaId) {
   window.open(`${URL_BASE}/api/notas-venta/${notaId}/pdf`, '_blank');
+}
+
+/**
+ * Descargar el PDF de una cotización.
+ * @param {number} cotizacionId - ID de la cotización
+ */
+export function descargarPdfCotizacion(cotizacionId) {
+  window.open(`${URL_BASE}/api/reportes/cotizacion/${cotizacionId}/pdf`, '_blank');
 }
 
 /**
@@ -496,4 +508,262 @@ export async function desactivarUsuario(id) {
   return hacerPeticion(`/api/usuarios/${id}`, {
     method: 'DELETE',
   });
+}
+
+/* ============================================================
+   CAJA - Apertura, movimientos, arqueo y cierre diario
+   ============================================================ */
+
+/**
+ * Obtener el resumen financiero del día (para el Dashboard).
+ * @returns {Promise<Object|null>} - { fecha, caja_abierta, ingresos_hoy,
+ *   egresos_hoy, esperado_hoy, facturado_hoy, notas_venta_hoy,
+ *   pagos_hoy, ordenes_cerradas_hoy }
+ */
+export async function obtenerResumenCaja() {
+  return hacerPeticion('/api/caja/resumen-dia');
+}
+
+/**
+ * Obtener la caja actual (abierta o null si está cerrada).
+ * @returns {Promise<{caja: Object|null}>} - La caja vigente o null.
+ */
+export async function obtenerCajaActual() {
+  return hacerPeticion('/api/caja/actual');
+}
+
+/**
+ * Abrir la caja del día con un monto inicial.
+ * @param {Object} datos - { monto_inicial: number }
+ * @returns {Promise<Object>} - La caja creada
+ */
+export async function abrirCaja(datos) {
+  return hacerPeticion('/api/caja/abrir', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Cerrar la caja con el arqueo (monto contado + nota opcional).
+ * Devuelve la diferencia (monto_contado − monto_esperado).
+ * @param {Object} datos - { monto_contado: number, nota_cierre?: string }
+ * @returns {Promise<Object>} - La caja cerrada con su diferencia
+ */
+export async function cerrarCaja(datos) {
+  return hacerPeticion('/api/caja/cerrar', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Registrar un movimiento manual en la caja actual.
+ * @param {Object} datos - { tipo: 'ingreso'|'egreso', monto: number,
+ *   descripcion?: string, metodo_pago?: string }
+ * @returns {Promise<Object>} - El movimiento creado
+ */
+export async function registrarMovimientoCaja(datos) {
+  return hacerPeticion('/api/caja/movimientos', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Obtener los movimientos de la caja actual (si está cerrada → []).
+ * @returns {Promise<Array>} - Lista de movimientos
+ */
+export async function obtenerMovimientosCaja() {
+  return hacerPeticion('/api/caja/movimientos');
+}
+
+/**
+ * Obtener el historial de cierres de caja.
+ * @returns {Promise<Array>} - Lista de cajas cerradas con sus sumas
+ */
+export async function obtenerHistorialCaja() {
+  return hacerPeticion('/api/caja/historial');
+}
+
+/* ============================================================
+   DIAGNÓSTICOS TÉCNICOS (V3)
+   Flujo: técnico llena diagnóstico → dueño aprueba/rechaza
+   ============================================================ */
+
+/**
+ * Guardar el diagnóstico técnico de un equipo (lo llena el técnico).
+ * Además del diagnóstico, incluye el desglose de repuestos por proveedor.
+ * @param {number} equipoId - ID del equipo
+ * @param {object} datos - { enciende, tipo_disco, capacidad_disco, tipo_memoria,
+ *   capacidad_memoria, slot_m2, slot_caddy, procesador, diagnostico, repuestos[] }
+ * @returns {Promise<Object>} Equipo actualizado
+ */
+export async function guardarDiagnostico(equipoId, datos) {
+  return hacerPeticion(`/api/equipos/${equipoId}/diagnostico`, {
+    method: 'PUT',
+    body: datos,
+  });
+}
+
+/**
+ * Aprobar el diagnóstico de un equipo (lo hace el dueño).
+ * @param {number} equipoId - ID del equipo
+ * @param {object} datos - { comentario, instalacion_decision, precio_venta }
+ * @returns {Promise<Object>} Equipo actualizado
+ */
+export async function aprobarDiagnostico(equipoId, datos) {
+  return hacerPeticion(`/api/equipos/${equipoId}/aprobar`, {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Rechazar el diagnóstico de un equipo (lo hace el dueño).
+ * @param {number} equipoId - ID del equipo
+ * @param {object} datos - { comentario }
+ * @returns {Promise<Object>} Equipo actualizado
+ */
+export async function rechazarDiagnostico(equipoId, datos) {
+  return hacerPeticion(`/api/equipos/${equipoId}/rechazar`, {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Listar diagnósticos.
+ * @param {string} [estado] - pendiente | aprobado | rechazado (opcional)
+ * @returns {Promise<Array>} Lista de diagnósticos con equipo + cliente + orden
+ */
+export async function obtenerDiagnosticos(estado = '') {
+  const q = estado ? `?estado=${estado}` : '';
+  return hacerPeticion(`/api/diagnosticos${q}`);
+}
+
+/**
+ * Obtener el link de WhatsApp de un diagnóstico.
+ * @param {number} equipoId - ID del equipo
+ * @returns {Promise<Object>} { link, mensaje }
+ */
+export async function obtenerWhatsappDiagnostico(equipoId) {
+  return hacerPeticion(`/api/diagnosticos/${equipoId}/whatsapp`);
+}
+
+/* ============================================================
+   FACTURACIÓN ELECTRÓNICA SRI
+   ============================================================ */
+
+/**
+ * Obtener la lista de facturas electrónicas generadas.
+ * @returns {Promise<Array>} - Lista de facturas
+ */
+export async function obtenerFacturas() {
+  const facturas = await hacerPeticion('/api/facturacion') || [];
+  // Defensivo: si el backend no devuelve array, devolver lista vacía.
+  if (!Array.isArray(facturas)) return [];
+  return facturas.map(f => ({
+    ...f,
+    estado_sri: f?.estado_sri,
+    // Campos nuevos del listado (facturas 01 + notas de crédito 04):
+    // tipo_comprobante default '01' para datos previos sin el campo.
+    tipo_comprobante: f?.tipo_comprobante ?? '01',
+    factura_referenciada_id: f?.factura_referenciada_id,
+    motivo_anulacion: f?.motivo_anulacion,
+    valor_anulacion: f?.valor_anulacion,
+    numero_autorizacion: f?.numero_autorizacion,
+    fecha_autorizacion: f?.fecha_autorizacion,
+    xml_respuesta_sri: f?.xml_respuesta_sri,
+  }));
+}
+
+/**
+ * Generar una factura electrónica a partir de una orden de servicio.
+ * @param {Object} datos - { orden_servicio_id: number, ambiente?: "1"|"2" }
+ * @returns {Promise<Object>} - La factura creada
+ */
+export async function generarFactura(datos) {
+  return hacerPeticion('/api/facturacion/generar', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Descargar el XML firmado de una factura electrónica.
+ * Abre el XML en una nueva pestaña del navegador (descarga attachment).
+ * @param {number} facturaId - ID de la factura
+ */
+export function descargarXmlFactura(facturaId) {
+  window.open(`${URL_BASE}/api/facturacion/${facturaId}/xml`, '_blank');
+}
+
+/**
+ * Transmitir y autorizar una factura al SRI (SOAP: recepción + autorización).
+ * @param {number} facturaId - ID de la factura
+ * @param {Object} datos - { forzar_ambiente?: "1"|"2", confirmar_produccion?: boolean }
+ * @returns {Promise<Object>} - { id, clave_acceso, estado_sri, numero_autorizacion,
+ *   fecha_autorizacion, errores }
+ */
+export async function transmitirFactura(facturaId, datos = {}) {
+  try {
+    return await hacerPeticion(`/api/facturacion/${facturaId}/transmitir`, {
+      method: 'POST',
+      body: datos,
+    });
+  } catch (err) {
+    // Traducir errores comunes del backend a mensajes amigables
+    const msg = (err.message || '').toLowerCase();
+    if (msg.includes('no tiene xml firmado')) {
+      throw new Error('La factura no está firmada. Crea la factura nuevamente.');
+    }
+    if (msg.includes('confirmación explícita') || msg.includes('confirmar_produccion')) {
+      throw new Error('Para transmitir a producción debes confirmar la acción explícitamente.');
+    }
+    if (msg.includes('no se pudo transmitir al sri')) {
+      throw new Error('No se pudo contactar al SRI. Revisa la conexión e inténtalo de nuevo.');
+    }
+    if (msg.includes('no encontrada')) {
+      throw new Error('La factura no existe o ya fue eliminada.');
+    }
+    if (err.message && !err.message.startsWith('Error 4')) {
+      throw new Error(`No se pudo transmitir al SRI: ${err.message}`);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Anular una factura emitiendo una NOTA DE CRÉDITO electrónica (SRI).
+ * La NC se firma, persiste y transmite automáticamente al SRI. Si la NC queda
+ * 'autorizado'/'recibida', la factura original se marca 'anulada' (o
+ * 'anulada_parcial' si monto_anular < total).
+ * @param {number} facturaId - ID de la factura a anular (tipo 01)
+ * @param {Object} datos - { motivo: string, monto_anular?: number }
+ *   motivo: obligatorio (va en <motivo> del XML).
+ *   monto_anular: monto TOTAL (IVA incluido) a anular; si se omite anula el 100%.
+ * @returns {Promise<Object>} - { nota_credito, factura_original, transmision }
+ */
+export async function anularFactura(facturaId, datos) {
+  try {
+    return await hacerPeticion(`/api/facturacion/${facturaId}/anular`, {
+      method: 'POST',
+      body: datos,
+    });
+  } catch (err) {
+    // Los errores 400/404 del backend llegan con 'detail' legible; se conserva
+    // y se agrega contexto donde conviene.
+    const msg = (err.message || '').toLowerCase();
+    if (msg.includes('ya tiene una nota de crédito asociada')) {
+      throw new Error('La factura ya tiene una nota de crédito asociada. Recarga la lista para ver el estado actual.');
+    }
+    if (msg.includes('solo se pueden anular') || msg.includes('solo se anulan facturas')) {
+      throw new Error(`No se puede anular esta factura: ${err.message}`);
+    }
+    if (msg.includes('no encontrada')) {
+      throw new Error('La factura no existe o ya fue eliminada.');
+    }
+    throw err;
+  }
 }

@@ -16,6 +16,7 @@ const titulosPagina = {
   '/notas-venta': 'Notas de Venta',
   '/usuarios': 'Usuarios',
   '/configuracion': 'Configuración',
+  '/caja': 'Caja',
 };
 
 const subtitulosPagina = {
@@ -27,6 +28,7 @@ const subtitulosPagina = {
   '/notas-venta': 'Facturación y notas de venta',
   '/usuarios': 'Administra los usuarios del sistema',
   '/configuracion': 'Datos del negocio y preferencias',
+  '/caja': 'Apertura, arqueo y cierre diario de caja',
 };
 
 export default function Encabezado() {

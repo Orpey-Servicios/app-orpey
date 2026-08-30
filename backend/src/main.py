@@ -43,7 +43,8 @@ from src.models.models import Base, Cliente, Tecnico, OrdenServicio, Cotizacion
 from src.routers import (
     clientes_router, ordenes_router, tecnicos_router,
     cotizaciones_router, reportes_router, notas_venta_router, auth_router,
-    pagos_router, notas_router, usuarios_router
+    pagos_router, notas_router, usuarios_router, diagnosticos_router,
+    facturacion_router, caja_router
 )
 
 
@@ -113,6 +114,9 @@ app.include_router(reportes_router)
 app.include_router(pagos_router)
 app.include_router(notas_router)
 app.include_router(usuarios_router)
+app.include_router(diagnosticos_router)
+app.include_router(facturacion_router)
+app.include_router(caja_router)
 
 # Manejador global de excepciones para evitar errores falsos de CORS
 @app.exception_handler(Exception)
@@ -149,6 +153,7 @@ async def raiz():
             "pagos": "/api/ordenes/{id}/pagos",
             "notas": "/api/ordenes/{id}/notas",
             "usuarios": "/api/usuarios",
+            "facturacion": "/api/facturacion",
         }
     }
 

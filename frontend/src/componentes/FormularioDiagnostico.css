@@ -1,0 +1,109 @@
+/* ============================================================
+   FormularioDiagnostico.css — Panel del técnico dentro de la orden
+   ============================================================ */
+
+.diag-tecnic-panel {
+  margin-top: 20px;
+  padding: 20px;
+  border: 2px dashed var(--color-primario);
+  border-radius: var(--borde-radio);
+  background: linear-gradient(135deg, rgba(251, 195, 5, 0.06), transparent);
+}
+
+.diag-tecnic-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 16px;
+  color: var(--texto-principal);
+}
+
+.diag-tecnic-badge {
+  margin-left: 8px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.diag-tecnic-badge--aprobado {
+  background: #E8F5E9;
+  color: var(--color-exito);
+}
+.diag-tecnic-badge--rechazado {
+  background: #FFEBEE;
+  color: var(--color-error);
+}
+
+/* Cuadrícula de campos */
+.diag-tecnic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.diag-tecnic-campo label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  margin-bottom: 4px;
+}
+
+.diag-tecnic-repuestos-titulo label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-principal);
+}
+
+/* Fila de repuesto */
+.diag-tecnic-fila-repuesto {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 100px 36px;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+/* Resumen del diagnóstico */
+.diag-tecnic-resumen {
+  margin-bottom: 16px;
+}
+.diag-tecnic-resumen label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-principal);
+  margin-bottom: 6px;
+}
+.diag-tecnic-resumen textarea {
+  min-height: 80px;
+  resize: vertical;
+  width: 100%;
+}
+
+/* Mensaje */
+.diag-tecnic-mensaje {
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: var(--borde-radio-sm);
+  margin-top: 12px;
+}
+.diag-tecnic-mensaje--exito {
+  background: #E8F5E9;
+  color: var(--color-exito);
+}
+.diag-tecnic-mensaje--error {
+  background: #FFEBEE;
+  color: var(--color-error);
+}
+
+/* Ajuste en móvil */
+@media (max-width: 640px) {
+  .diag-tecnic-fila-repuesto {
+    grid-template-columns: 1fr 1fr;
+  }
+  .diag-tecnic-fila-repuesto .campo-texto:nth-child(3) {
+    grid-column: span 1;
+  }
+}

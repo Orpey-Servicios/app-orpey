@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from src.config.database import get_db
 from src.models.models import NotaVenta, OrdenServicio, Cliente, ConfiguracionSistema
@@ -59,6 +60,13 @@ async def crear_nota_venta(
 
     if not orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    # REGLA: Solo permitir generar la nota de venta si está pagada al 100%
+    if orden.abono < orden.total_orden:
+        raise HTTPException(
+            status_code=400, 
+            detail="La orden debe estar pagada al 100% para generar una nota de venta."
+        )
 
     # Obtener el IVA configurado
     result = await db.execute(
@@ -147,9 +155,13 @@ async def generar_pdf_nota(
     if not nota:
         raise HTTPException(status_code=404, detail="Nota de venta no encontrada")
 
-    # Obtener la orden
-    result = await db.execute(select(OrdenServicio).where(OrdenServicio.id == nota.orden_servicio_id))
-    orden = result.scalar_one_or_none()
+    # Obtener la orden con sus equipos
+    result = await db.execute(
+        select(OrdenServicio)
+        .options(joinedload(OrdenServicio.equipos))
+        .where(OrdenServicio.id == nota.orden_servicio_id)
+    )
+    orden = result.unique().scalar_one_or_none()
 
     # Obtener el cliente
     result = await db.execute(select(Cliente).where(Cliente.id == nota.cliente_id))
@@ -169,12 +181,19 @@ async def generar_pdf_nota(
         'total': float(nota.total),
     }
 
+    equipos_data = []
+    if orden and orden.equipos:
+        for eq in orden.equipos:
+            equipos_data.append({
+                'tipo_equipo': eq.tipo_equipo.value if hasattr(eq.tipo_equipo, 'value') else str(eq.tipo_equipo),
+                'marca': eq.marca,
+                'modelo': eq.modelo,
+                'descripcion_problema': eq.descripcion_problema,
+            })
+
     orden_data = {
         'numero_orden': orden.numero_orden,
-        'tipo_equipo': orden.tipo_equipo.value if hasattr(orden.tipo_equipo, 'value') else str(orden.tipo_equipo),
-        'marca': orden.marca,
-        'modelo': orden.modelo,
-        'descripcion_problema': orden.descripcion_problema,
+        'equipos': equipos_data
     }
 
     cliente_data = {

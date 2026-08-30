@@ -38,7 +38,7 @@ export default function Login() {
     <div className="login-pagina">
       <div className="login-tarjeta">
         <div className="login-tarjeta__logo">
-          <img src="/logo-orpey.png" alt="Orpey Servicios" />
+          <img src={localStorage.getItem('orpey_custom_logo') || "/logo-orpey.png"} alt="Orpey Servicios" />
         </div>
         <h1 className="login-tarjeta__titulo">Iniciar Sesión</h1>
         <p className="login-tarjeta__subtitulo">Ingresa tus credenciales para acceder</p>

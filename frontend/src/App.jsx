@@ -18,6 +18,7 @@
  * ============================================================
  */
 
+import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Outlet } from 'react-router-dom';
 
 // Importar los componentes de layout
@@ -26,6 +27,9 @@ import Encabezado from './componentes/Encabezado';
 
 // Importar ruta protegida
 import RutaProtegida from './componentes/RutaProtegida';
+
+// Importar el ErrorBoundary (protege contra páginas en blanco)
+import ErrorBoundary from './componentes/ErrorBoundary';
 
 // Importar las páginas
 import Dashboard from './paginas/Dashboard';
@@ -37,8 +41,12 @@ import ClienteDetalle from './paginas/ClienteDetalle';
 import Tecnicos from './paginas/Tecnicos';
 import Cotizaciones from './paginas/Cotizaciones';
 import NotasVenta from './paginas/NotasVenta';
+import Facturas from './paginas/Facturas';
+import Caja from './paginas/Caja';
 import Login from './paginas/Login';
 import Usuarios from './paginas/Usuarios';
+import Diagnostico from './paginas/Diagnostico';
+import Configuracion from './paginas/Configuracion';
 
 /**
  * Layout principal: Sidebar fijo + Header + Contenido dinámico
@@ -64,9 +72,11 @@ function LayoutPrincipal() {
         {/* Header siempre visible */}
         <Encabezado />
 
-        {/* Outlet: aquí se renderiza la página actual */}
+        {/* Outlet: aquí se renderiza la página actual (protegida por ErrorBoundary) */}
         <main className="layout__main">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>
@@ -77,6 +87,19 @@ function LayoutPrincipal() {
  * Componente App: define todas las rutas de la aplicación
  */
 export default function App() {
+  // Aplicar configuraciones guardadas al iniciar la app
+  useEffect(() => {
+    const customColor = localStorage.getItem('orpey_custom_primary_color');
+    if (customColor) {
+      document.documentElement.style.setProperty('--color-primario', customColor);
+    }
+    
+    const isDark = localStorage.getItem('orpey_dark_mode') === 'true';
+    if (isDark) {
+      document.body.classList.add('dark-theme');
+    }
+  }, []);
+
   return (
     // BrowserRouter: habilita el enrutamiento basado en la URL del navegador
     <BrowserRouter>
@@ -108,8 +131,20 @@ export default function App() {
           {/* Rutas de Notas de Venta */}
           <Route path="/notas-venta" element={<NotasVenta />} />
 
+          {/* Rutas de Facturación Electrónica SRI */}
+          <Route path="/facturacion" element={<Facturas />} />
+
+          {/* Rutas de Caja */}
+          <Route path="/caja" element={<Caja />} />
+
           {/* Rutas de Usuarios (solo admin) */}
           <Route path="/usuarios" element={<Usuarios />} />
+
+          {/* Rutas de Diagnósticos (revisión del dueño) */}
+          <Route path="/diagnosticos" element={<Diagnostico />} />
+
+          {/* Rutas de Configuración */}
+          <Route path="/configuracion" element={<Configuracion />} />
         </Route>
       </Routes>
     </BrowserRouter>
