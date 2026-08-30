@@ -8,3 +8,6 @@ from .auth import router as auth_router
 from .pagos import router as pagos_router
 from .notas import router as notas_router
 from .usuarios import router as usuarios_router
+from .diagnosticos import router as diagnosticos_router
+from .facturacion import router as facturacion_router
+from .caja import router as caja_router

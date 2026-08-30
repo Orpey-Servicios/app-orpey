@@ -18,7 +18,7 @@ from datetime import datetime
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, text
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.database import get_db
@@ -136,7 +136,7 @@ async def crear_orden(
     # Cargar relaciones para la respuesta
     result = await db.execute(
         select(OrdenServicio)
-        .options(joinedload(OrdenServicio.equipos))
+        .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
         .where(OrdenServicio.id == db_orden.id)
     )
     db_orden_cargada = result.unique().scalar_one()
@@ -167,7 +167,7 @@ async def listar_ordenes(
     query = select(OrdenServicio).options(
         joinedload(OrdenServicio.cliente),
         joinedload(OrdenServicio.tecnico),
-        joinedload(OrdenServicio.equipos)
+        joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos)
     )
 
     if estado:
@@ -230,7 +230,7 @@ async def obtener_orden(
     result = await db.execute(
         select(OrdenServicio)
         .options(
-            joinedload(OrdenServicio.equipos),
+            joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos),
             joinedload(OrdenServicio.cliente),
             joinedload(OrdenServicio.tecnico)
         )
@@ -274,6 +274,22 @@ async def obtener_orden(
                 "created_at": eq.created_at,
                 "updated_at": eq.updated_at,
                 "total_pagado": Decimal(str(round(pagado_para_equipo(eq), 2))),
+                # Campos de diagnóstico técnico (V3)
+                "enciende": eq.enciende,
+                "tipo_disco": eq.tipo_disco,
+                "capacidad_disco": eq.capacidad_disco,
+                "tipo_memoria": eq.tipo_memoria,
+                "capacidad_memoria": eq.capacidad_memoria,
+                "slot_m2": eq.slot_m2,
+                "slot_caddy": eq.slot_caddy,
+                "procesador": eq.procesador,
+                # Campos de aprobación del dueño (V3)
+                "estado_aprobacion": eq.estado_aprobacion,
+                "comentario_dueño": eq.comentario_dueño,
+                "instalacion_decision": eq.instalacion_decision,
+                "precio_venta": eq.precio_venta,
+                # Desglose de repuestos (V3)
+                "repuestos": eq.repuestos,
             }
         )
         for eq in orden.equipos
@@ -314,7 +330,7 @@ async def actualizar_orden(
     """
     result = await db.execute(
         select(OrdenServicio)
-        .options(joinedload(OrdenServicio.equipos))
+        .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
         .where(OrdenServicio.id == orden_id)
     )
     orden = result.unique().scalar_one_or_none()
@@ -436,7 +452,7 @@ async def actualizar_equipo(
         # Usar el abono de la orden distribuido proporcionalmente
         orden_nhs = await db.execute(
             select(OrdenServicio)
-            .options(joinedload(OrdenServicio.equipos))
+            .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
             .where(OrdenServicio.id == orden_id)
         )
         orden_nhs_data = orden_nhs.unique().scalar_one_or_none()
@@ -456,7 +472,7 @@ async def actualizar_equipo(
     # Sincronizar el estado de la orden con el estado del equipo
     result = await db.execute(
         select(OrdenServicio)
-        .options(joinedload(OrdenServicio.equipos))
+        .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
         .where(OrdenServicio.id == orden_id)
     )
     orden = result.unique().scalar_one_or_none()

@@ -1,0 +1,338 @@
+/* ============================================================
+   Diagnostico.css - Estilos de la sección de diagnósticos del dueño
+   ============================================================ */
+
+.diagnostico-pagina {
+  padding: 20px;
+}
+
+/* ===== Barra de acciones y filtros ===== */
+.diagnostico__acciones {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.diagnostico__filtros {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filtro-select {
+  min-width: 220px;
+  cursor: pointer;
+}
+
+.diagnostico__buscador {
+  display: flex;
+  align-items: center;
+  background: var(--fondo-tarjeta);
+  border: 1.5px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm);
+  padding: 0 12px;
+  min-width: 260px;
+}
+
+.diagnostico__buscador .campo-texto {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ===== Lista de tarjetas ===== */
+.diagnostico__lista {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diagnostico__tarjeta {
+  background: var(--fondo-tarjeta);
+  border: 1.5px solid var(--borde-color);
+  border-radius: var(--borde-radio);
+  overflow: hidden;
+  box-shadow: var(--sombra-md);
+}
+
+/* Encabezado de la tarjeta */
+.diagnostico__tarjeta-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--borde-color);
+  background: linear-gradient(135deg, rgba(251, 195, 5, 0.08), transparent);
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.diagnostico__cliente {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diagnostico__avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--color-primario);
+  color: var(--texto-principal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.diagnostico__cliente strong {
+  font-size: 16px;
+  color: var(--texto-principal);
+  display: block;
+}
+
+.diagnostico__tlf {
+  font-size: 13px;
+  color: var(--texto-secundario);
+}
+
+.diagnostico__orden {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.diagnostico__badge-orden {
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texto-principal);
+}
+
+.diagnostico__estado {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Cuerpo de la tarjeta */
+.diagnostico__equipo {
+  padding: 16px 20px;
+}
+
+.diagnostico__titulo-equipo {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--texto-principal);
+  margin-bottom: 10px;
+}
+
+.diagnostico__problema {
+  font-size: 14px;
+  color: var(--texto-principal);
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--fondo-principal);
+  border-left: 3px solid var(--color-primario);
+  border-radius: var(--borde-radio-sm);
+}
+
+/* Especificaciones del diagnóstico */
+.diagnostico__especificaciones {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.diag-spec {
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.diag-spec span {
+  font-size: 11px;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-bottom: 2px;
+}
+
+.diag-spec strong {
+  font-size: 13px;
+  color: var(--texto-principal);
+}
+
+/* Resumen / diagnóstico del técnico */
+.diagnostico__resumen {
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.diagnostico__resumen p {
+  margin: 6px 0 0;
+  color: var(--texto-principal);
+  background: var(--fondo-principal);
+  padding: 10px 14px;
+  border-radius: var(--borde-radio-sm);
+}
+
+/* Repuestos */
+.diagnostico__repuestos {
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.diagnostico__repuestos-lista {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.repuesto-chip {
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+}
+.repuesto-chip em {
+  font-style: normal;
+  color: var(--color-exito);
+  font-weight: 700;
+}
+
+/* Decisión del dueño */
+.diagnostico__decision {
+  padding: 12px 16px;
+  border-radius: var(--borde-radio-sm);
+  margin-top: 12px;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diagnostico__decision.aprobado {
+  background: #E8F5E9;
+  border-left: 4px solid var(--color-exito);
+}
+.diagnostico__decision.rechazado {
+  background: #FFEBEE;
+  border-left: 4px solid var(--color-error);
+}
+
+/* Acciones de la tarjeta */
+.diagnostico__acciones-tarjeta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--borde-color);
+}
+
+.diagnostico__sin-accion {
+  font-size: 13px;
+  color: var(--texto-secundario);
+  font-weight: 500;
+}
+
+/* ===== Botón de éxito (verde) ===== */
+.boton-exito {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--color-exito);
+  color: white;
+  font-weight: 600;
+  font-size: var(--fuente-tamano-base);
+  border-radius: var(--borde-radio-sm);
+  transition: all var(--transicion-rapida);
+  border: none;
+  cursor: pointer;
+}
+
+.boton-exito:hover {
+  background: #1B5E20;
+  transform: translateY(-1px);
+}
+
+/* ===== Modal (reutiliza patrón del proyecto) ===== */
+.modal-overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5); display: flex; align-items: center;
+  justify-content: center; z-index: 1000;
+  padding: 20px; backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--fondo-principal);
+  border-radius: var(--borde-radio);
+  width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  padding: 24px;
+}
+
+.modal__titulo {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--texto-principal);
+}
+
+.modal__subtitulo {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--texto-secundario);
+}
+
+.modal__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-principal);
+  margin: 14px 0 6px;
+}
+
+.modal__textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.modal__acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+/* Respuesta en móvil */
+@media (max-width: 640px) {
+  .diagnostico__acciones-tarjeta {
+    flex-wrap: wrap;
+  }
+  .diagnostico__filtros {
+    flex-direction: column;
+    width: 100%;
+  }
+  .diagnostico__buscador {
+    width: 100%;
+  }
+}

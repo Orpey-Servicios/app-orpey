@@ -13,9 +13,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ClipboardList, Monitor, Laptop, Printer, Smartphone,
-  FileText, CheckCircle, TrendingUp, AlertCircle, Plus
+  FileText, CheckCircle, TrendingUp, AlertCircle, Plus,
+  Wallet, FileCheck2, Receipt, ClipboardCheck,
 } from 'lucide-react';
-import { obtenerDashboard, obtenerOrdenes } from '../api/orpey-api';
+import { obtenerDashboard, obtenerOrdenes, obtenerResumenCaja } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
 import './Dashboard.css';
 
@@ -24,6 +25,7 @@ export default function Dashboard() {
   // [valor, setValor] = useState(valorInicial)
   const [stats, setStats] = useState(null);       // Estadísticas del dashboard
   const [ordenes, setOrdenes] = useState([]);     // Últimas órdenes
+  const [resumenCaja, setResumenCaja] = useState(null); // Resumen financiero del día
   const [cargando, setCargando] = useState(true); // ¿Está cargando?
   const [error, setError] = useState(null);       // Mensaje de error
 
@@ -42,13 +44,20 @@ export default function Dashboard() {
     try {
       setCargando(true);
       setError(null);
-      // Promise.all ejecuta ambas peticiones AL MISMO TIEMPO (más rápido)
+      // Promise.all ejecuta las peticiones AL MISMO TIEMPO (más rápido).
+      // El resumen de caja es defensivo: si falla, no rompe el dashboard.
       const [dashData, ordenesData] = await Promise.all([
         obtenerDashboard(),
         obtenerOrdenes()
       ]);
       setStats(dashData);
       setOrdenes(ordenesData.slice(0, 5)); // Solo las 5 más recientes
+      try {
+        const resumen = await obtenerResumenCaja();
+        setResumenCaja(resumen || null);
+      } catch (e) {
+        setResumenCaja(null);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,6 +80,46 @@ export default function Dashboard() {
   const tipoEquipoTexto = {
     pc_escritorio: 'PC', laptop: 'Laptop', impresora: 'Impresora', telefono: 'Teléfono', otro: 'Otro'
   };
+
+  // ── Resumen financiero del día (defensivo: null → $0.00 / 0) ──
+  const resumen = resumenCaja || {};
+  const cajaAbiertaHoy = !!resumen.caja_abierta;
+  const moneda = (v) => '$' + Number(v || 0).toFixed(2);
+
+  const tarjetasFinancieras = [
+    {
+      titulo: 'Caja',
+      valor: cajaAbiertaHoy ? moneda(resumen.esperado_hoy) : moneda(resumen.ingresos_hoy),
+      icono: Wallet, color: '#22C55E', fondo: '#F0FDF4',
+      subtexto: cajaAbiertaHoy
+        ? `Caja abierta · Inicial ${moneda(resumen.caja_abierta?.monto_inicial)}`
+        : (resumen.fecha ? 'Caja cerrada hoy' : 'Sin datos de caja hoy'),
+    },
+    {
+      titulo: 'Facturado hoy',
+      valor: moneda(resumen.facturado_hoy),
+      icono: FileCheck2, color: '#3B82F6', fondo: '#EFF6FF',
+      subtexto: 'Ventas facturadas del día',
+    },
+    {
+      titulo: 'Notas de venta hoy',
+      valor: moneda(resumen.notas_venta_hoy),
+      icono: Receipt, color: '#F97316', fondo: '#FFF7ED',
+      subtexto: 'S/I de ventas del día',
+    },
+    {
+      titulo: 'Ingresos (caja) hoy',
+      valor: moneda(resumen.ingresos_hoy),
+      icono: TrendingUp, color: '#06B6D4', fondo: '#ECFEFF',
+      subtexto: `Egresos: ${moneda(resumen.egresos_hoy)}`,
+    },
+    {
+      titulo: 'Órdenes cerradas hoy',
+      valor: Number(resumen.ordenes_cerradas_hoy || 0),
+      icono: ClipboardCheck, color: '#6B7280', fondo: '#F3F4F6',
+      subtexto: 'Servicios entregados',
+    },
+  ];
 
   // Pantalla de carga
   if (cargando) {
@@ -118,6 +167,31 @@ export default function Dashboard() {
               <div className="tarjeta-stat__info">
                 <span className="tarjeta-stat__valor">{tarjeta.valor}</span>
                 <span className="tarjeta-stat__titulo">{tarjeta.titulo}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Resumen financiero del día */}
+      <div className="dashboard__financiero-header animar-entrada">
+        <h2><Wallet size={20} /> Resumen Financiero</h2>
+      </div>
+      <div className="dashboard__financiero">
+        {tarjetasFinancieras.map((tarjeta, index) => {
+          const Icono = tarjeta.icono;
+          return (
+            <div
+              key={tarjeta.titulo}
+              className={`tarjeta-stat animar-entrada animar-retraso-${index + 1}`}
+            >
+              <div className="tarjeta-stat__icono" style={{ background: tarjeta.fondo, color: tarjeta.color }}>
+                <Icono size={22} />
+              </div>
+              <div className="tarjeta-stat__info">
+                <span className="tarjeta-stat__valor">{tarjeta.valor}</span>
+                <span className="tarjeta-stat__titulo">{tarjeta.titulo}</span>
+                {tarjeta.subtexto && <span className="tarjeta-stat__subtexto">{tarjeta.subtexto}</span>}
               </div>
             </div>
           );

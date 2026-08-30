@@ -1,1 +1,68 @@
+/* Estilos Cotizaciones */
 .cotizaciones-pagina { padding: 0 32px 32px; }
+
+/* ===== Modal (patrón del proyecto, self-contained en esta página) ===== */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--fondo-tarjeta); border-radius: var(--borde-radio-lg);
+  padding: 28px; width: 90%; max-width: 560px; max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--sombra-xl); animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+.modal__header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+}
+.modal__header h3 { font-size: var(--fuente-tamano-lg); font-weight: 700; }
+.modal__botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+/* Grid de 2 columnas para total y validez (patrón OrdenFormulario) */
+.orden-form__grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* ===== Autocomplete de cliente ===== */
+.autocomplete { position: relative; }
+.autocomplete__input-wrap { position: relative; }
+.autocomplete__icono {
+  position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--texto-terciario); pointer-events: none;
+}
+.cot-autocomplete__input { padding-left: 36px; }
+.autocomplete__lista {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm); box-shadow: var(--sombra-lg);
+  max-height: 240px; overflow-y: auto; margin-top: 4px;
+}
+.autocomplete__item {
+  padding: 10px 14px; cursor: pointer; display: flex; flex-direction: column;
+  gap: 2px; transition: background var(--transicion-rapida);
+  border-bottom: 1px solid var(--borde-color);
+}
+.autocomplete__item:hover { background: var(--color-primario-sutil); }
+.autocomplete__item strong { font-size: var(--fuente-tamano-base); }
+.autocomplete__item span { font-size: var(--fuente-tamano-xs); color: var(--texto-secundario); }
+.autocomplete__vacio {
+  padding: 16px; text-align: center; color: var(--texto-terciario);
+  font-size: var(--fuente-tamano-sm);
+}
+
+/* Cliente seleccionado (token verde) */
+.cliente-seleccionado {
+  margin-top: 8px; padding: 8px 12px; background: var(--color-exito-fondo);
+  border-radius: var(--borde-radio-sm); font-size: var(--fuente-tamano-sm);
+  color: var(--color-exito); display: flex; align-items: center;
+  justify-content: space-between; gap: 8px;
+}
+.cliente-seleccionado__limpiar {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--color-exito); opacity: 0.6; cursor: pointer;
+  transition: opacity var(--transicion-rapida);
+}
+.cliente-seleccionado__limpiar:hover { opacity: 1; }

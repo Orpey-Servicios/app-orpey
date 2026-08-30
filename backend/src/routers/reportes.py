@@ -15,7 +15,7 @@ from sqlalchemy.orm import joinedload
 
 from src.config.database import get_db
 from src.models.models import OrdenServicio, Cotizacion, Cliente, Tecnico
-from src.services.pdf_generator import crear_pdf_orden
+from src.services.pdf_generator import crear_pdf_orden, crear_pdf_cotizacion
 from src.services.whatsapp import generar_link_whatsapp, generar_mensaje_orden, generar_mensaje_cotizacion
 
 router = APIRouter(
@@ -241,3 +241,73 @@ async def generar_whatsapp_cotizacion(
         "telefono": cliente.telefono,
         "mensaje": mensaje
     }
+
+@router.get(
+    "/cotizacion/{cotizacion_id}/pdf",
+    summary="Generar PDF de cotización",
+    description="Genera y descarga un PDF con los datos de la cotización."
+)
+async def generar_pdf_cotizacion_route(
+    cotizacion_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    # Obtener la cotización
+    result = await db.execute(
+        select(Cotizacion)
+        .options(joinedload(Cotizacion.items))
+        .where(Cotizacion.id == cotizacion_id)
+    )
+    cotizacion = result.unique().scalar_one_or_none()
+
+    if not cotizacion:
+        raise HTTPException(status_code=404, detail="Cotización no encontrada")
+
+    # Obtener el cliente
+    result = await db.execute(select(Cliente).where(Cliente.id == cotizacion.cliente_id))
+    cliente = result.scalar_one_or_none()
+
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    # Obtener configuración del negocio
+    from src.models.models import ConfiguracionSistema
+    result = await db.execute(select(ConfiguracionSistema))
+    config_rows = result.scalars().all()
+    config_data = {row.clave: row.valor for row in config_rows if row.valor is not None}
+
+    items_data = []
+    for it in cotizacion.items:
+        items_data.append({
+            'descripcion': it.descripcion,
+            'cantidad': it.cantidad,
+            'precio_unitario': float(it.precio_unitario),
+            'total_item': float(it.total_item)
+        })
+
+    cotizacion_data = {
+        'numero_cotizacion': cotizacion.numero_cotizacion,
+        'descripcion': cotizacion.descripcion,
+        'total': float(cotizacion.total),
+        'validez_dias': cotizacion.validez_dias,
+        'incluye_iva': cotizacion.incluye_iva,
+        'estado': cotizacion.estado.value if hasattr(cotizacion.estado, 'value') else str(cotizacion.estado),
+        'fecha_creacion': cotizacion.fecha_creacion.isoformat() if cotizacion.fecha_creacion else None,
+        'items': items_data
+    }
+
+    cliente_data = {
+        'nombre': cliente.nombre,
+        'apellido': cliente.apellido,
+        'telefono': cliente.telefono,
+        'cedula_ruc': cliente.cedula_ruc or 'No registrado',
+    }
+
+    pdf_buffer = crear_pdf_cotizacion(cotizacion_data, cliente_data, config_data)
+
+    return StreamingResponse(
+        pdf_buffer,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=cotizacion_{cotizacion.numero_cotizacion}.pdf"
+        }
+    )

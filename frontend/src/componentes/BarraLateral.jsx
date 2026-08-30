@@ -36,11 +36,14 @@ import {
   Wrench,
   FileText,
   Receipt,
+  FileCheck2,
+  Wallet,
   Settings,
   LogOut,
   ChevronDown,
   Eye,
   FilePlus,
+  Stethoscope,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -62,9 +65,11 @@ const itemsMenu = [
     ],
   },
   { ruta: '/clientes',     nombre: 'Clientes',        icono: Users },
-  { ruta: '/tecnicos',     nombre: 'Técnicos',        icono: Wrench },
+  { ruta: '/diagnosticos', nombre: 'Diagnósticos',    icono: Stethoscope },
   { ruta: '/cotizaciones', nombre: 'Cotizaciones',     icono: FileText },
   { ruta: '/notas-venta',  nombre: 'Notas de Venta',  icono: Receipt },
+  { ruta: '/facturacion',  nombre: 'Facturación',     icono: FileCheck2 },
+  { ruta: '/caja',         nombre: 'Caja',            icono: Wallet },
 ];
 
 /**
@@ -78,13 +83,29 @@ export default function BarraLateral() {
   const { usuario, logout } = useAuth();
   const [menuAbierto, setMenuAbierto] = useState(null);
 
-  const itemsExtra = [];
+  const configSubItems = [
+    { ruta: '/configuracion', nombre: 'Ajustes Generales', icono: Settings },
+    { ruta: '/tecnicos',      nombre: 'Técnicos',          icono: Wrench },
+  ];
 
   if (usuario?.rol === 'admin') {
-    itemsExtra.push({ ruta: '/usuarios', nombre: 'Usuarios', icono: UserCog });
+    configSubItems.push({ ruta: '/usuarios', nombre: 'Usuarios', icono: UserCog });
   }
 
-  const todosLosItems = [...itemsMenu, ...itemsExtra];
+  const itemsExtra = [
+    {
+      nombre: 'Configuración',
+      icono: Settings,
+      subItems: configSubItems
+    }
+  ];
+
+  // Caja es operativa (admin/asistente); los técnicos no la ven en el menú.
+  const itemsMenuVisibles = usuario?.rol === 'tecnico'
+    ? itemsMenu.filter(i => i.nombre !== 'Caja')
+    : itemsMenu;
+
+  const todosLosItems = [...itemsMenuVisibles, ...itemsExtra];
 
   // Verificar si alguna sub-ruta está activa (para marcar el padre)
   function esSubMenuActivo(subItems) {
@@ -107,7 +128,7 @@ export default function BarraLateral() {
 
       <div className="barra-lateral__logo">
         <img
-          src="/logo-orpey.png"
+          src={localStorage.getItem('orpey_custom_logo') || "/logo-orpey.png"}
           alt="Orpey Servicios"
           className="barra-lateral__logo-img"
         />
@@ -206,10 +227,7 @@ export default function BarraLateral() {
             </div>
           </div>
         )}
-        <Link to="/configuracion" className="barra-lateral__link" id="nav-configuracion">
-          <Settings size={20} />
-          <span>Configuración</span>
-        </Link>
+
         <button onClick={logout} className="barra-lateral__link" id="btn-cerrar-sesion" style={{ width: '100%', textAlign: 'left' }}>
           <LogOut size={20} />
           <span>Cerrar Sesión</span>

@@ -7,20 +7,22 @@
  * 3. 📝 Notas internas con historial (quién, cuándo, qué dijo)
  */
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import {
   ArrowLeft, Edit, FileDown, MessageCircle, Receipt,
   Trash2, User, Wrench, Calendar, Shield, Save, X, DollarSign,
   Plus, Clock, MessageSquare, UserCheck, CreditCard, ListChecks,
-  Pencil, History
+  Pencil, History, FileCheck2, Ban
 } from 'lucide-react';
 import {
   obtenerOrden, obtenerCliente, obtenerTecnico, actualizarEquipo,
   eliminarOrden, descargarPdfOrden, obtenerWhatsappOrden, crearNotaVenta,
   actualizarCliente, actualizarOrden,
-  registrarPago, obtenerPagos, agregarNota, obtenerNotas, obtenerTecnicos
+  registrarPago, obtenerPagos, agregarNota, obtenerNotas, obtenerTecnicos,
+  obtenerFacturas, generarFactura
 } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
+import FormularioDiagnostico from '../componentes/FormularioDiagnostico';
 import { useAuth } from '../context/AuthContext';
 import './OrdenDetalle.css';
 import './OrdenFormulario.css';
@@ -69,6 +71,7 @@ export default function OrdenDetalle() {
   const [pagos, setPagos] = useState([]);
   const [notas, setNotas] = useState([]);
   const [tecnicos, setTecnicos] = useState([]);
+  const [facturas, setFacturas] = useState([]);
   const [cargando, setCargando] = useState(true);
 
   // ── Estados de modales ──────────────────────────
@@ -100,6 +103,9 @@ export default function OrdenDetalle() {
       ]);
       setOrden(ordenData);
       setTecnicos(tecnicosData);
+      try {
+        setFacturas(await obtenerFacturas());
+      } catch (err) { console.error('Error cargando facturas:', err); setFacturas([]); }
 
       // Nombre del técnico actual como autor por defecto
       const daniel = tecnicosData.find(t =>
@@ -163,6 +169,17 @@ export default function OrdenDetalle() {
       await crearNotaVenta({ orden_servicio_id: Number(id), cliente_id: orden.cliente_id });
       alert('Nota de venta creada exitosamente');
     } catch (err) { alert('Error: ' + err.message); }
+  }
+
+  // Generar factura electrónica SRI
+  async function generarFacturaSRI() {
+    if (!confirm('¿Generar factura electrónica SRI para esta orden?')) return;
+    try {
+      setError(null);
+      const factura = await generarFactura({ orden_servicio_id: Number(id) });
+      alert(`Factura ${factura.numero_documento} generada y firmada correctamente`);
+      navigate('/facturacion');
+    } catch (err) { setError(err.message); }
   }
 
   // Eliminar orden
@@ -315,6 +332,13 @@ export default function OrdenDetalle() {
   if (!orden) return <div className="dashboard__vacio"><p>Orden no encontrada</p></div>;
 
   const porCancelar = Number(orden.total_orden) - Number(orden.abono);
+  const facturaOrden = facturas.find(f => Number(f.orden_servicio_id) === Number(id));
+  const tieneFactura = Boolean(facturaOrden);
+  const facturaAutorizada = Boolean(facturaOrden?.estado_sri === 'autorizado' && facturaOrden?.numero_autorizacion);
+  const facturaAnulada = Boolean(facturaOrden && (facturaOrden.estado_sri === 'anulada' || facturaOrden.estado_sri === 'anulada_parcial'));
+  const esFacturable = (orden.estado === 'entregada' || orden.estado === 'terminada') &&
+    Number(orden.abono) >= Number(orden.total_orden) &&
+    !tieneFactura;
 
   return (
     <div className="orden-detalle">
@@ -331,6 +355,42 @@ export default function OrdenDetalle() {
           <button className="boton-secundario" onClick={() => descargarPdfOrden(Number(id))} title="Descargar PDF"><FileDown size={18} /> PDF</button>
           <button className="boton-secundario" onClick={enviarWhatsapp} title="Enviar por WhatsApp" style={{ color: '#25D366' }}><MessageCircle size={18} /> WhatsApp</button>
           <button className="boton-secundario" onClick={convertirNotaVenta} title="Nota de Venta"><Receipt size={18} /> Nota Venta</button>
+          
+{facturaAnulada ? (
+              <Link to="/facturacion" className="btn-card-accion" title={facturaOrden.estado_sri === 'anulada_parcial'
+                ? 'La factura fue anulada parcialmente con una nota de crédito'
+                : 'La factura fue anulada con una nota de crédito'}
+                style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
+                <Ban size={14} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
+              </Link>
+            ) : facturaAutorizada ? (
+              <Link to="/facturacion" className="btn-card-accion" title={`Autorización SRI: ${facturaOrden.numero_autorizacion}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)' }}>
+                <FileCheck2 size={14} /> Facturada ✓
+              </Link>
+            ) : tieneFactura ? (
+            <Link to="/facturacion" className="boton-secundario" style={{ color: 'var(--texto-secundario)' }}>
+              <FileCheck2 size={18} /> Estado Factura
+            </Link>
+          ) : (
+            <button
+              className="boton-secundario"
+              onClick={() => {
+                if (porCancelar <= 0) generarFacturaSRI();
+              }}
+              title={porCancelar > 0 ? `Falta pagar $${porCancelar.toFixed(2)} para facturar` : 'Generar factura electrónica SRI'}
+              style={{
+                opacity: porCancelar > 0 ? 0.6 : 1,
+                cursor: porCancelar > 0 ? 'not-allowed' : 'pointer',
+                color: porCancelar <= 0 ? '#1976d2' : undefined,
+                borderColor: porCancelar <= 0 ? '#90caf9' : undefined,
+                backgroundColor: porCancelar <= 0 ? '#e3f2fd' : undefined
+              }}
+              disabled={porCancelar > 0}
+            >
+              <FileCheck2 size={18} /> Facturar
+            </button>
+          )}
+
           <button className="boton-primario" onClick={() => navigate(`/ordenes/${id}/editar`)}><Edit size={18} /> Editar</button>
           {(usuario?.rol === 'admin' || usuario?.rol === 'asistente') && (
             <button className="boton-icono" onClick={borrarOrden} style={{ color: 'var(--color-error)' }} title="Eliminar"><Trash2 size={18} /></button>
@@ -363,108 +423,6 @@ export default function OrdenDetalle() {
           )}
         </div>
 
-        {/* ─── TARJETA: FINANCIERO (EDITABLE + PAGOS) ─── */}
-        <div className="orden-detalle__card orden-detalle__card--financiero">
-          <div className="orden-detalle__card-header">
-            <h3><DollarSign size={18} /> Financiero</h3>
-            <div className="orden-detalle__card-acciones">
-              <button className="btn-card-accion" onClick={abrirModalTotal} title="Editar total">
-                <Pencil size={14} /> Total
-              </button>
-              <button className="btn-card-accion btn-card-accion--pago" onClick={() => {
-                // Auto-seleccionar equipo cuando hay uno solo (previene pagos sin asignar)
-                const autoEquipoId = orden.equipos?.length === 1 ? String(orden.equipos[0].id) : '';
-                setFormPago({ monto: '', metodo_pago: 'efectivo', equipo_id: autoEquipoId });
-                setModalPago(true);
-              }} title="Registrar pago">
-                <Plus size={14} /> Pago
-              </button>
-            </div>
-          </div>
-
-          <div className="orden-detalle__financiero-wrapper">
-            {/* ── Columna izquierda: resumen financiero ── */}
-            <div className="orden-detalle__financiero">
-              <div className="financiero-item">
-                <span>Total</span>
-                <strong>${Number(orden.total_orden).toFixed(2)}</strong>
-              </div>
-              <div className="financiero-item">
-                <span>Abono</span>
-                <strong style={{ color: '#2e7d32' }}>${Number(orden.abono).toFixed(2)}</strong>
-              </div>
-              <div className="financiero-item financiero-item--destacado">
-                <span>Por Cancelar</span>
-                <strong style={{ color: porCancelar > 0 ? 'var(--color-error)' : 'var(--color-exito)' }}>
-                  ${porCancelar.toFixed(2)}
-                </strong>
-              </div>
-            </div>
-
-            {/* ── Columna derecha: desglose por equipo + historial ── */}
-            <div className="orden-detalle__financiero-detalle">
-              {/* ─── DESGLOSE POR EQUIPO ─── */}
-              {orden.equipos?.length > 0 && (
-                <div className="orden-detalle__desglose-equipos">
-                  <h4 className="historial-titulo"><ListChecks size={14} /> Costo por Equipo</h4>
-                  <div className="desglose-equipos-lista" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    {orden.equipos.map((eq, idx) => {
-                      const eqCosto = Number(eq.costo) || 0;
-                      const pagado = calcularPagadoEquipo(eq.id, orden.equipos, orden.abono);
-                      const saldo = eqCosto - pagado;
-                      return (
-                        <div key={eq.id || idx} className="desglose-equipo-item">
-                          <span className="desglose-equipo-item__nombre">
-                            #{idx + 1} {eq.marca} {eq.modelo}
-                            <span className="tipo">
-                              ({tipoEquipoTexto[eq.tipo_equipo]?.split(' ')[1] || eq.tipo_equipo})
-                            </span>
-                          </span>
-                          <span className="desglose-equipo-item__costo">${eqCosto.toFixed(2)}</span>
-                          <span className="desglose-equipo-item__pagado" style={{ color: pagado > 0 ? 'var(--color-exito)' : 'var(--texto-secundario)' }}>
-                            Pagado: ${pagado.toFixed(2)}
-                          </span>
-                          <span className="desglose-equipo-item__saldo" style={{ color: saldo > 0 ? 'var(--color-error)' : 'var(--color-exito)' }}>
-                            {saldo > 0 ? `Saldo: $${saldo.toFixed(2)}` : '✓ Pagado'}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ─── HISTORIAL DE PAGOS ─── */}
-              {pagos.length > 0 && (
-                <div className="orden-detalle__historial-pagos">
-                  <h4 className="historial-titulo"><History size={14} /> Historial de Pagos</h4>
-                  <div className="historial-pagos-lista">
-                    {pagos.map(pago => (
-                      <div key={pago.id} className="historial-pago-item">
-                        <div className="historial-pago-left">
-                          <span className="historial-pago-monto">+${Number(pago.monto).toFixed(2)}</span>
-                          <span className="historial-pago-metodo">{pago.metodo_pago}</span>
-                          {pago.equipo_marca && (
-                            <span className="historial-pago-equipo" style={{ fontSize: '11px', color: 'var(--texto-secundario)' }}>
-                              → {pago.equipo_marca} {pago.equipo_modelo || ''}
-                            </span>
-                          )}
-                        </div>
-                        <span className="historial-pago-fecha">
-                          {new Date(pago.created_at).toLocaleDateString('es-EC', {
-                            day: 'numeric', month: 'short',
-                            hour: '2-digit', minute: '2-digit'
-                          })}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* ─── TARJETA: INFORMACIÓN ─── */}
         <div className="orden-detalle__card">
           <h3><Calendar size={18} /> Información</h3>
@@ -473,6 +431,138 @@ export default function OrdenDetalle() {
             {orden.creado_por && <p>✍️ Creado por: <strong>{orden.creado_por}</strong></p>}
             {tecnico && <p>👨‍🔧 Técnico asignado: <strong>{tecnico.nombre} {tecnico.apellido}</strong></p>}
             <p><Shield size={14} /> Garantía: {orden.garantia_dias ? `${orden.garantia_dias} días` : 'Sin garantía'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══ SECCIÓN FINANCIERA (ANCHO COMPLETO) ═══ */}
+      <div className="orden-detalle__card--financiero animar-entrada animar-retraso-2">
+        <div className="orden-detalle__card-header">
+          <h3><DollarSign size={18} /> Datos Financieros</h3>
+          <div className="orden-detalle__card-acciones">
+            {/* ─── Botón de Facturar (SRI) ─── */}
+{facturaAnulada ? (
+            <Link to="/facturacion" className="boton-secundario" title={facturaOrden.estado_sri === 'anulada_parcial'
+              ? 'La factura de esta orden fue anulada parcialmente con una nota de crédito'
+              : 'La factura de esta orden fue anulada con una nota de crédito'}
+              style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
+              <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
+            </Link>
+          ) : facturaAutorizada ? (
+              <Link to="/facturacion" className="btn-card-accion" title={`Autorización SRI: ${facturaOrden.numero_autorizacion}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)' }}>
+                <FileCheck2 size={14} /> Facturada ✓
+              </Link>
+            ) : tieneFactura ? (
+              <Link to="/facturacion" className="btn-card-accion" style={{ color: 'var(--texto-secundario)' }}>
+                <FileCheck2 size={14} /> Estado Factura
+              </Link>
+            ) : (
+              <button
+                className={`btn-card-accion ${porCancelar > 0 ? 'btn-card-accion--bloqueado' : 'btn-card-accion--facturar'}`}
+                onClick={() => {
+                  if (porCancelar <= 0) generarFacturaSRI();
+                }}
+                title={porCancelar > 0 ? `Falta pagar $${porCancelar.toFixed(2)} para facturar` : 'Generar factura electrónica SRI'}
+                disabled={porCancelar > 0}
+              >
+                <FileCheck2 size={14} /> Facturar
+              </button>
+            )}
+
+            <button className="btn-card-accion" onClick={abrirModalTotal} title="Editar total">
+              <Pencil size={14} /> Total
+            </button>
+            <button className="btn-card-accion btn-card-accion--pago" onClick={() => {
+              const autoEquipoId = orden.equipos?.length === 1 ? String(orden.equipos[0].id) : '';
+              setFormPago({ monto: '', metodo_pago: 'efectivo', equipo_id: autoEquipoId });
+              setModalPago(true);
+            }} title="Registrar pago">
+              <Plus size={14} /> Pago
+            </button>
+          </div>
+        </div>
+
+        {/* Barra de resumen */}
+        <div className="financiero-resumen-bar">
+          <div className="financiero-resumen-item">
+            <span>Total de la Orden</span>
+            <strong>${Number(orden.total_orden).toFixed(2)}</strong>
+          </div>
+          <div className="financiero-resumen-item financiero-resumen-item--pagado">
+            <span>Total Abonado</span>
+            <strong style={{ color: '#2e7d32' }}>${Number(orden.abono).toFixed(2)}</strong>
+          </div>
+          <div className={`financiero-resumen-item ${porCancelar > 0 ? 'financiero-resumen-item--saldo' : 'financiero-resumen-item--pagado'}`}>
+            <span>Por Cancelar</span>
+            <strong style={{ color: porCancelar > 0 ? 'var(--color-error)' : '#2e7d32' }}>
+              ${porCancelar.toFixed(2)}
+            </strong>
+          </div>
+        </div>
+
+        {/* Grid: Equipos + Historial de Pagos */}
+        <div className="financiero-contenido-grid">
+          {/* Columna: Costo por equipo */}
+          {orden.equipos?.length > 0 && (
+            <div className="financiero-columna">
+              <h4><ListChecks size={14} /> Costo por Equipo</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {orden.equipos.map((eq, idx) => {
+                  const eqCosto = Number(eq.costo) || 0;
+                  const pagado = calcularPagadoEquipo(eq.id, orden.equipos, orden.abono);
+                  const saldo = eqCosto - pagado;
+                  return (
+                    <div key={eq.id || idx} className="desglose-equipo-item">
+                      <span className="desglose-equipo-item__nombre">
+                        #{idx + 1} {eq.marca} {eq.modelo}
+                        <span className="tipo">
+                          ({tipoEquipoTexto[eq.tipo_equipo]?.split(' ')[1] || eq.tipo_equipo})
+                        </span>
+                      </span>
+                      <span className="desglose-equipo-item__costo">${eqCosto.toFixed(2)}</span>
+                      <span className="desglose-equipo-item__pagado" style={{ color: pagado > 0 ? 'var(--color-exito)' : 'var(--texto-secundario)' }}>
+                        Pagado: ${pagado.toFixed(2)}
+                      </span>
+                      <span className="desglose-equipo-item__saldo" style={{ color: saldo > 0 ? 'var(--color-error)' : 'var(--color-exito)' }}>
+                        {saldo > 0 ? `Saldo: $${saldo.toFixed(2)}` : '✓ Pagado'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Columna: Historial de pagos */}
+          <div className="financiero-columna">
+            <h4><History size={14} /> Historial de Pagos</h4>
+            {pagos.length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--texto-secundario)', margin: 0 }}>
+                No hay pagos registrados aún.
+              </p>
+            ) : (
+              <div className="historial-pagos-lista">
+                {pagos.map(pago => (
+                  <div key={pago.id} className="historial-pago-item">
+                    <div className="historial-pago-left">
+                      <span className="historial-pago-monto">+${Number(pago.monto).toFixed(2)}</span>
+                      <span className="historial-pago-metodo">{pago.metodo_pago}</span>
+                      {pago.equipo_marca && (
+                        <span className="historial-pago-equipo" style={{ fontSize: '11px', color: 'var(--texto-secundario)' }}>
+                          → {pago.equipo_marca} {pago.equipo_modelo || ''}
+                        </span>
+                      )}
+                    </div>
+                    <span className="historial-pago-fecha">
+                      {new Date(pago.created_at).toLocaleDateString('es-EC', {
+                        day: 'numeric', month: 'short',
+                        hour: '2-digit', minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -580,6 +670,9 @@ export default function OrdenDetalle() {
                 </div>
               )}
             </div>
+
+            {/* ═══ FORMULARIO DE DIAGNÓSTICO DEL TÉCNICO ═══ */}
+            <FormularioDiagnostico equipo={equipo} />
           </div>
         ))}
       </div>

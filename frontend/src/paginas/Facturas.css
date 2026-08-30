@@ -1,0 +1,200 @@
+/* Estilos Facturación Electrónica SRI */
+.facturas-pagina { padding: 0 32px 32px; }
+
+/* Header de la página */
+.facturas__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 0 16px; gap: 16px;
+}
+.facturas__header h2 {
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--fuente-tamano-2xl, 24px); font-weight: 800;
+  margin: 0;
+}
+.facturas__header p {
+  margin: 4px 0 0; color: var(--texto-secundario);
+  font-size: var(--fuente-tamano-sm);
+}
+
+/* Clave de acceso: tipografía mono, truncada con title completo al hover */
+.facturas__clave {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fuente-tamano-xs);
+  max-width: 220px; display: inline-block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  vertical-align: bottom; cursor: help;
+}
+
+/* Link del origen (órdenes) */
+.facturas__link { color: var(--color-info); text-decoration: none; font-weight: 600; }
+.facturas__link:hover { text-decoration: underline; }
+
+/* Select del modal de generación */
+.facturas__select-ordenes { width: 100%; }
+.facturas__hint {
+  margin-top: 6px; font-size: var(--fuente-tamano-xs);
+  color: var(--texto-terciario); line-height: 1.4;
+}
+
+/* Badge de estado de error (devuelta / no autorizada) */
+.facturas__badge--error {
+  border: 1px solid rgba(220, 38, 38, 0.35);
+}
+.facturas__badge--clickable {
+  cursor: pointer;
+}
+.facturas__badge-icono {
+  margin-left: 6px; vertical-align: middle;
+}
+
+/* Columna de autorización SRI */
+.facturas__aut {
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+/* N° documento + tipo de comprobante (Factura / Nota Crédito) */
+.facturas__doc {
+  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
+}
+.facturas__doc strong { white-space: nowrap; }
+.facturas__tipo {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+  text-transform: uppercase;
+}
+.facturas__tipo--fac {
+  background: #EFF6FF; color: #2563EB;
+}
+.facturas__tipo--nc {
+  background: #F5F3FF; color: #7C3AED;
+}
+
+/* Origen cuando la fila es una nota de crédito */
+.facturas__origen-nc {
+  font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
+  font-weight: 600;
+}
+
+/* Referencia bidireccional: NC → factura original / factura anulada → NC */
+.facturas__nc-ref {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fuente-tamano-xs); color: #7C3AED; font-weight: 600;
+  white-space: nowrap; cursor: help;
+}
+
+/* Badges de estados de anulación (factura original anulada por una NC) */
+.badge--anulada {
+  background: #F5F3FF; color: #7C3AED;
+}
+.badge--anulada .badge-estado__punto { background: #8B5CF6; }
+.badge--anulada-parcial {
+  background: #F3F4F6; color: #6B7280;
+}
+.badge--anulada-parcial .badge-estado__punto { background: #A78BFA; }
+
+/* Botón Anular (emite nota de crédito) */
+.facturas__btn-anular {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font-size: var(--fuente-tamano-xs);
+  white-space: nowrap;
+  color: #B45309; border-color: rgba(180, 83, 9, 0.4);
+}
+.facturas__btn-anular:hover {
+  background: #FFFBEB; border-color: #B45309; color: #92400E;
+}
+
+/* Modal de anulación */
+.facturas__anular-resumen {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px; border-radius: 8px;
+  background: var(--fondo-secundario);
+  border: 1px solid rgba(124, 58, 237, 0.2);
+  font-size: var(--fuente-tamano-sm);
+  margin-bottom: 16px;
+}
+.facturas__anular-resumen p { margin: 0; color: var(--texto-secundario); }
+.facturas__anular-resumen strong { color: var(--texto-principal); }
+.facturas__textarea-motivo { width: 100%; resize: vertical; min-height: 72px; }
+.facturas__monto-fila {
+  display: flex; gap: 8px; align-items: center;
+}
+.facturas__monto-fila .campo-texto { flex: 1; }
+.facturas__monto-hint {
+  margin-top: 6px; font-size: var(--fuente-tamano-xs);
+  color: #7C3AED; line-height: 1.4;
+}
+.facturas__nc-aviso {
+  display: flex; align-items: center; gap: 8px;
+  margin: 4px 0 16px; padding: 10px 12px; border-radius: 8px;
+  background: #EFF6FF; border: 1px solid rgba(59, 130, 246, 0.25);
+  color: #1D4ED8; font-size: var(--fuente-tamano-sm); line-height: 1.4;
+}
+.facturas__nc-aviso svg { flex-shrink: 0; }
+.facturas__btn-anular-confirmar {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #7C3AED; border-color: #7C3AED;
+}
+.facturas__btn-anular-confirmar:hover {
+  background: #6D28D9; border-color: #6D28D9;
+}
+.facturas__aut-num {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--fuente-tamano-xs);
+  max-width: 220px; display: inline-block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  vertical-align: bottom; cursor: help; color: var(--color-exito);
+}
+.facturas__aut-fecha {
+  font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
+  white-space: nowrap;
+}
+.facturas__aut--vacio { color: var(--texto-terciario); }
+
+/* Ambiente */
+.facturas__ambiente {
+  font-size: var(--fuente-tamano-xs); font-weight: 600;
+  padding: 2px 8px; border-radius: 999px;
+  background: var(--fondo-secundario); color: var(--texto-secundario);
+}
+.facturas__ambiente--prod {
+  background: #FEF3C7; color: #B45309;
+}
+
+/* Botón transmitir al SRI */
+.facturas__btn-transmitir {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px; font-size: var(--fuente-tamano-xs);
+  white-space: nowrap;
+}
+
+/* Modal de errores SRI */
+.modal--md { max-width: 560px; }
+.facturas__detalle-num {
+  margin: 0 0 12px; font-size: var(--fuente-tamano-sm);
+}
+.facturas__detalle-aviso {
+  margin: 0 0 16px; font-size: var(--fuente-tamano-sm);
+  color: var(--texto-secundario); line-height: 1.5;
+  padding: 12px; border-radius: 8px;
+  background: #FEF3C7; border: 1px solid rgba(180, 83, 9, 0.25);
+}
+.facturas__errores-lista {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 40vh; overflow-y: auto;
+  margin-bottom: 16px;
+}
+.facturas__error-item {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; border-radius: 8px;
+  background: var(--fondo-secundario);
+  border-left: 3px solid var(--color-error);
+  font-size: var(--fuente-tamano-sm);
+}
+.facturas__error-codigo {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700; color: var(--color-error);
+}
+.facturas__error-info {
+  font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
+}

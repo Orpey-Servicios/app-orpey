@@ -37,22 +37,12 @@
   transform: none !important;
 }
 
-/* Grid de tarjetas — layout asimétrico para dar espacio al financiero */
+/* Grid de tarjetas — Cliente e Info lado a lado */
 .orden-detalle__grid {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
+  grid-template-columns: 1fr 1fr;
   gap: 16px;
   margin-bottom: 20px;
-}
-
-@media (max-width: 1100px) {
-  .orden-detalle__grid {
-    grid-template-columns: 1fr 1fr;
-  }
-  /* Financiero ocupa la fila completa en tablet */
-  .orden-detalle__grid > .orden-detalle__card--financiero {
-    grid-column: 1 / -1;
-  }
 }
 @media (max-width: 700px) {
   .orden-detalle__grid {
@@ -71,20 +61,91 @@
 .orden-detalle__datos p { font-size: var(--fuente-tamano-sm); color: var(--texto-secundario); margin-bottom: 6px; }
 .orden-detalle__datos strong { color: var(--texto-principal); }
 
-/* Financiero */
+/* ════════════════════════════════════════════
+   SECCIÓN FINANCIERA — Ancho completo
+   ════════════════════════════════════════════ */
 .orden-detalle__card--financiero {
-  min-width: 0;
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio);
+  padding: 24px;
+  margin-bottom: 20px;
 }
-.orden-detalle__financiero-wrapper {
+
+/* Barra de resumen: Total | Abono | Por Cancelar */
+.financiero-resumen-bar {
   display: grid;
-  grid-template-columns: minmax(160px, 1fr) 2fr;
-  gap: 24px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.financiero-resumen-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 12px;
+  background: var(--fondo-secundario);
+  border-radius: var(--borde-radio);
+  text-align: center;
+}
+.financiero-resumen-item span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.financiero-resumen-item strong {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--texto-principal);
+  line-height: 1.2;
+}
+.financiero-resumen-item--saldo {
+  background: #fff5f5;
+  border: 1px solid #ffcdd2;
+}
+.financiero-resumen-item--pagado {
+  background: #f1f8e9;
+  border: 1px solid #c5e1a5;
 }
 @media (max-width: 600px) {
-  .orden-detalle__financiero-wrapper {
+  .financiero-resumen-bar {
     grid-template-columns: 1fr;
   }
 }
+
+/* Grid interno: equipos + historial */
+.financiero-contenido-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 800px) {
+  .financiero-contenido-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Columnas internas */
+.financiero-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.financiero-columna h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  margin: 0 0 6px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--borde-color);
+}
+
 .orden-detalle__financiero {
   display: flex; flex-direction: column; gap: 10px;
 }
@@ -97,23 +158,6 @@
   padding-top: 10px; border-top: 1px solid var(--borde-color); margin-top: 4px;
 }
 .financiero-item--destacado strong { font-size: var(--fuente-tamano-xl); }
-
-/* Columna derecha del financiero: desglose + historial */
-.orden-detalle__financiero-detalle {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  border-left: 1px solid var(--borde-color);
-  padding-left: 20px;
-}
-@media (max-width: 600px) {
-  .orden-detalle__financiero-detalle {
-    border-left: none;
-    padding-left: 0;
-    border-top: 1px solid var(--borde-color);
-    padding-top: 16px;
-  }
-}
 
 /* Desglose de equipo — layout de tabla limpio */
 .desglose-equipo-item {
@@ -207,6 +251,21 @@
 }
 .btn-card-accion--pago:hover {
   background: #c8e6c9; border-color: #66bb6a;
+}
+.btn-card-accion--facturar {
+  background: #e3f2fd; border-color: #90caf9; color: #1976d2;
+}
+.btn-card-accion--facturar:hover {
+  background: #bbdefb; border-color: #64b5f6;
+}
+.btn-card-accion--bloqueado {
+  opacity: 0.5; cursor: not-allowed !important;
+  background: #f5f5f5 !important; border-color: #ddd !important;
+  color: #999 !important; pointer-events: auto;
+}
+.btn-card-accion--bloqueado:hover {
+  border-color: #ddd !important; color: #999 !important;
+  transform: none !important;
 }
 
 /* ════════════════════════════════════════════

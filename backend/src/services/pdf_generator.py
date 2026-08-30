@@ -480,6 +480,7 @@ def crear_pdf_nota_venta(nota_data, orden_data, cliente_data, config_data):
         f"<b><font color='#353534' size='16'>NOTA DE VENTA N° {nota_data.get('numero_nota', 'N/A')}</font></b>",
         styles['Normal']
     ))
+    contenido.append(Spacer(1, 6))
     
     fecha_emision = nota_data.get('fecha_emision')
     if fecha_emision:
@@ -508,8 +509,14 @@ def crear_pdf_nota_venta(nota_data, orden_data, cliente_data, config_data):
     tipo_equipo_map = {'pc_escritorio': 'PC', 'laptop': 'Laptop', 'impresora': 'Impresora', 'telefono': 'Teléfono', 'otro': 'Otro'}
 
     contenido.append(Paragraph(f"<b>Orden N°:</b> {orden_data.get('numero_orden', '')}", styles['ValorNota']))
-    contenido.append(Paragraph(f"<b>Equipo:</b> {tipo_equipo_map.get(orden_data.get('tipo_equipo', ''), '')} {orden_data.get('marca', '')} {orden_data.get('modelo', '')}", styles['ValorNota']))
-    contenido.append(Paragraph(f"<b>Descripción:</b> {orden_data.get('descripcion_problema', '')}", styles['ValorNota']))
+    
+    equipos = orden_data.get('equipos', [])
+    for idx, eq in enumerate(equipos):
+        equipo_str = f"{tipo_equipo_map.get(eq.get('tipo_equipo', ''), 'Otro')} {eq.get('marca', '')} {eq.get('modelo', '')}".strip()
+        label = "<b>Equipo:</b>" if len(equipos) == 1 else f"<b>Equipo {idx+1}:</b>"
+        contenido.append(Paragraph(f"{label} {equipo_str}", styles['ValorNota']))
+        if eq.get('descripcion_problema'):
+            contenido.append(Paragraph(f"<b>Descripción:</b> {eq.get('descripcion_problema', '')}", styles['ValorNota']))
 
     contenido.append(Spacer(1, 10))
 
@@ -520,23 +527,31 @@ def crear_pdf_nota_venta(nota_data, orden_data, cliente_data, config_data):
     iva = nota_data.get('iva', 0)
     total = nota_data.get('total', 0)
 
+    # Estilos blancos para el header de la tabla
+    estilo_header_nv = ParagraphStyle('HeaderNV', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=ORPEY_WHITE, spaceAfter=0)
+    estilo_header_nv_r = ParagraphStyle('HeaderNVR', parent=estilo_header_nv, alignment=TA_RIGHT)
+    # Estilo blanco para la fila TOTAL
+    estilo_total_nv = ParagraphStyle('TotalNV', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=10, textColor=ORPEY_DARK, spaceAfter=0)
+    estilo_total_nv_r = ParagraphStyle('TotalNVR', parent=estilo_total_nv, alignment=TA_RIGHT)
+
     datos_totales = [
-        [Paragraph("<b>Concepto</b>", styles['ValorNota']), Paragraph("<b>Valor</b>", styles['ValorNota'])],
+        [Paragraph("<b>Concepto</b>", estilo_header_nv), Paragraph("<b>Valor</b>", estilo_header_nv_r)],
         ["Subtotal", f"$ {subtotal:.2f}"],
         [f"IVA ({config_data.get('iva_porcentaje', '15')}%)", f"$ {iva:.2f}"],
-        [Paragraph("<b>TOTAL</b>", styles['ValorNota']), Paragraph(f"<b>$ {total:.2f}</b>", styles['ValorNota'])]
+        [Paragraph("<b>TOTAL</b>", estilo_total_nv), Paragraph(f"<b>$ {total:.2f}</b>", estilo_total_nv_r)]
     ]
 
     tabla_totales = Table(datos_totales, colWidths=[280, 100])
     tabla_totales.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), ORPEY_SECONDARY),
-        ('TEXTCOLOR', (0, 0), (-1, 0), ORPEY_WHITE),
         ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
         ('GRID', (0, 0), (-1, -1), 0.5, ORPEY_ACCENT),
         ('BACKGROUND', (0, -1), (-1, -1), ORPEY_LIGHT),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 5),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
     ]))
     contenido.append(tabla_totales)
 
@@ -547,6 +562,164 @@ def crear_pdf_nota_venta(nota_data, orden_data, cliente_data, config_data):
         f"Gracias por confiar en {config_data.get('nombre_negocio', 'ORPEY SERVICIOS')} | orpeyservicios.com",
         ParagraphStyle('PieNota', parent=styles['Normal'], alignment=TA_CENTER, fontSize=8, textColor=ORPEY_GRAY)
     ))
+
+    doc.build(contenido)
+    buffer.seek(0)
+    return buffer
+
+def crear_pdf_cotizacion(cotizacion_data, cliente_data, config_data):
+    """Crea un PDF de cotización optimizado."""
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=5, bottomMargin=20,
+        title=f"Cotización {cotizacion_data.get('numero_cotizacion', 'N/A')}"
+    )
+
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle('Subtitulo', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=11, textColor=ORPEY_SECONDARY, spaceBefore=10, spaceAfter=5, borderPadding=(0, 0, 2, 0), borderWidth=0, borderColor=ORPEY_GRAY))
+    styles.add(ParagraphStyle('LabelCampo', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, textColor=ORPEY_GRAY, spaceAfter=0))
+    styles.add(ParagraphStyle('ValorCampo', parent=styles['Normal'], fontName='Helvetica', fontSize=9, textColor=ORPEY_DARK, spaceAfter=2))
+    styles.add(ParagraphStyle('MontoCampo', parent=styles['ValorCampo'], alignment=TA_RIGHT))
+    styles.add(ParagraphStyle('Terminos', parent=styles['Normal'], fontName='Helvetica', fontSize=6.5, textColor=ORPEY_GRAY, alignment=TA_JUSTIFY, leading=8, spaceAfter=0))
+
+    contenido = []
+
+    # ENCABEZADO
+    fecha_creacion = cotizacion_data.get('fecha_creacion')
+    fecha_str = "N/A"
+    if fecha_creacion:
+        try:
+            if isinstance(fecha_creacion, str): fecha_str = datetime.fromisoformat(fecha_creacion.replace('Z', '')).strftime('%d/%m/%Y')
+            else: fecha_str = fecha_creacion.strftime('%d/%m/%Y')
+        except: fecha_str = str(fecha_creacion)[:10]
+
+    info_header = [
+        [obtener_logo(height=45),
+         Paragraph(f"<b><font color='#353534' size='14'>SERVICIO TÉCNICO</font></b><br/><b><font color='#FBC305' size='12'>COTIZACIÓN N° {cotizacion_data.get('numero_cotizacion', 'N/A')}</font></b>", styles['Normal']),
+         Paragraph(f"<b>FECHA: {fecha_str}</b>", ParagraphStyle('FechaH', parent=styles['Normal'], alignment=TA_RIGHT, leading=12))
+        ]
+    ]
+    tabla_encabezado = Table(info_header, colWidths=[180, 200, 120], hAlign='LEFT')
+    tabla_encabezado.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (0, 0), (0, 0), 'LEFT'), ('ALIGN', (1, 0), (1, 0), 'CENTER'), ('ALIGN', (2, 0), (2, 0), 'RIGHT'), ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    contenido.append(tabla_encabezado)
+    contenido.append(HRFlowable(width="100%", thickness=2, color=ORPEY_PRIMARY, spaceBefore=10, spaceAfter=8))
+
+    # DATOS DEL CLIENTE
+    datos_principales = [[Paragraph("<b>DATOS DEL CLIENTE</b>", styles['Subtitulo']), Paragraph("<b>DETALLES</b>", styles['Subtitulo'])]]
+    col_cliente = [f"<b>Nombre:</b> {cliente_data.get('nombre', '')} {cliente_data.get('apellido', '')}", f"<b>Teléfono:</b> {cliente_data.get('telefono', '')}", f"<b>Cédula/RUC:</b> {cliente_data.get('cedula_ruc', 'N/A')}"]
+    col_extra = [f"<b>Validez:</b> {cotizacion_data.get('validez_dias', 7)} días", f"<b>Estado:</b> {cotizacion_data.get('estado', 'Abierta').title()}"]
+    
+    max_filas = max(len(col_cliente), len(col_extra))
+    for i in range(max_filas):
+        c1 = col_cliente[i] if i < len(col_cliente) else ""
+        c2 = col_extra[i] if i < len(col_extra) else ""
+        datos_principales.append([Paragraph(c1, styles['ValorCampo']), Paragraph(c2, styles['ValorCampo'])])
+
+    tabla_datos = Table(datos_principales, colWidths=[250, 250], hAlign='LEFT')
+    tabla_datos.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('BOTTOMPADDING', (0, 0), (-1, 0), 2), ('TOPPADDING', (0, 1), (-1, -1), 0), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+    contenido.append(tabla_datos)
+
+    # DETALLE DE LA COTIZACIÓN (tabla unificada con totales)
+    contenido.append(Paragraph("DETALLE DE LA COTIZACIÓN", styles['Subtitulo']))
+
+    # Estilos con texto blanco para filas oscuras
+    estilo_blanco = ParagraphStyle('ValorBlanco', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=9, textColor=ORPEY_WHITE, spaceAfter=0)
+    estilo_blanco_r = ParagraphStyle('MontoBlanco', parent=estilo_blanco, alignment=TA_RIGHT)
+    # Estilo para header
+    estilo_header = ParagraphStyle('HeaderCot', parent=styles['Normal'], fontName='Helvetica-Bold', fontSize=8, textColor=ORPEY_WHITE, spaceAfter=0)
+    estilo_header_r = ParagraphStyle('HeaderCotR', parent=estilo_header, alignment=TA_RIGHT)
+
+    items = cotizacion_data.get('items', [])
+    total = float(cotizacion_data.get('total', 0))
+    incluye_iva = cotizacion_data.get('incluye_iva', False)
+    iva_porcentaje = float(config_data.get('iva_porcentaje', 15))
+
+    # Si no hay items pero hay descripción (cotizaciones antiguas), crear ítem sintético
+    if not items:
+        desc = cotizacion_data.get('descripcion', 'Servicio')
+        if desc == "Cotización General":
+            desc = "Servicio"
+        items = [{'descripcion': desc, 'cantidad': 1, 'precio_unitario': total, 'total_item': total}]
+
+    # Construir tabla completa: header + items + totales
+    tabla_completa = []
+
+    # Header row
+    tabla_completa.append([
+        Paragraph("<b>Descripción</b>", estilo_header),
+        Paragraph("<b>Cant.</b>", estilo_header),
+        Paragraph("<b>P. Unitario</b>", estilo_header_r),
+        Paragraph("<b>Total</b>", estilo_header_r)
+    ])
+
+    # Item rows
+    for it in items:
+        tabla_completa.append([
+            Paragraph(it.get('descripcion', ''), styles['ValorCampo']),
+            Paragraph(str(it.get('cantidad', 1)), styles['ValorCampo']),
+            Paragraph(f"$ {float(it.get('precio_unitario', 0)):.2f}", styles['MontoCampo']),
+            Paragraph(f"$ {float(it.get('total_item', 0)):.2f}", styles['MontoCampo'])
+        ])
+
+    # Separador visual: fila vacía delgada
+    num_filas_items = len(tabla_completa)
+
+    # Filas de totales (alineadas a la derecha, columnas 2-3)
+    if incluye_iva:
+        subtotal = total / (1 + (iva_porcentaje / 100))
+        iva = total - subtotal
+        tabla_completa.append([
+            Paragraph("", styles['ValorCampo']), Paragraph("", styles['ValorCampo']),
+            Paragraph("<b>Subtotal</b>", styles['MontoCampo']),
+            Paragraph(f"$ {subtotal:.2f}", styles['MontoCampo'])
+        ])
+        tabla_completa.append([
+            Paragraph("", styles['ValorCampo']), Paragraph("", styles['ValorCampo']),
+            Paragraph(f"<b>IVA ({int(iva_porcentaje)}%)</b>", styles['MontoCampo']),
+            Paragraph(f"$ {iva:.2f}", styles['MontoCampo'])
+        ])
+
+    # Fila TOTAL (fondo oscuro, texto blanco)
+    tabla_completa.append([
+        Paragraph("", styles['ValorCampo']), Paragraph("", styles['ValorCampo']),
+        Paragraph("<b>TOTAL</b>", estilo_blanco_r),
+        Paragraph(f"<b>$ {total:.2f}</b>", estilo_blanco_r)
+    ])
+
+    t_cot = Table(tabla_completa, colWidths=[250, 50, 100, 100])
+    estilos_tabla = [
+        # Header
+        ('BACKGROUND', (0, 0), (-1, 0), ORPEY_SECONDARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), ORPEY_WHITE),
+        # Grid general
+        ('GRID', (0, 0), (-1, num_filas_items - 1), 0.5, ORPEY_ACCENT),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        # Filas items alternadas
+        ('ROWBACKGROUNDS', (0, 1), (-1, num_filas_items - 1), [ORPEY_WHITE, ORPEY_LIGHT]),
+        # Fila TOTAL (última fila) - fondo oscuro
+        ('BACKGROUND', (2, -1), (-1, -1), ORPEY_SECONDARY),
+        ('TEXTCOLOR', (2, -1), (-1, -1), ORPEY_WHITE),
+        # Bordes para filas de totales
+        ('LINEABOVE', (2, num_filas_items), (-1, num_filas_items), 1, ORPEY_ACCENT),
+        ('GRID', (2, num_filas_items), (-1, -1), 0.5, ORPEY_ACCENT),
+    ]
+    t_cot.setStyle(TableStyle(estilos_tabla))
+    contenido.append(t_cot)
+
+    # FOOTER
+    contenido.append(Spacer(1, 30))
+    contenido.append(HRFlowable(width="100%", thickness=1.5, color=ORPEY_PRIMARY, spaceBefore=10, spaceAfter=8))
+    footer_info = [[
+        Paragraph(f"<b>📍 Dirección:</b><br/>{config_data.get('direccion_negocio', 'Guayaquil, Ecuador')}", styles['Terminos']),
+        Paragraph(f"<b>📱 Whatsapp:</b><br/><font size='9' color='#353534'><b>+593 958 894 099</b></font>", styles['Terminos']),
+        Paragraph(f"<b>📸 Instagram:</b> @orpey_<br/><b>👤 Facebook:</b> /orpeyservi", styles['Terminos'])
+    ]]
+    t_footer = Table(footer_info, colWidths=[180, 160, 160], hAlign='LEFT')
+    contenido.append(t_footer)
 
     doc.build(contenido)
     buffer.seek(0)

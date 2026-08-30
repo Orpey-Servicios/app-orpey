@@ -1,5 +1,33 @@
 # Registro de Progreso - Orpey Servicios
 
+## 📅 Sesión: 28 de Agosto 2026
+
+### FASE 6: Facturación Electrónica SRI — MÓDULO COMPLETO ✅
+
+**Fecha:** 28 de Agosto 2026
+
+**Lo que se hizo** (detalle completo en `FACTURACION-SRI.md`):
+
+1. **Régimen tributario verificado en vivo en el SRI** (por @contador): el emisor es **RÉGIMEN GENERAL** (no RIMPE). La sesión de julio decía RIMPE Negocios Populares — quedó desactualizada. Impacto: facturación 100% electrónica obligatoria, tope consumidor final **$50.00**, sin leyenda RIMPE.
+2. **Generación + firma XAdES-BES** de facturas con el certificado ANFAC real (`.p12` de producción, password resuelto automáticamente desde `~/agente-contador/.firma_p12.pass`).
+3. **Validaciones backend:** orden pagada 100%, estado entregada/terminada, anti-duplicado, tope $50 consumidor final.
+4. **Transmisión SOAP al SRI** (`transmision_sri.py`): WS-Security X509 con la firma real, recepción + autorización, reintentos en EN PROCESO, guard de producción (`confirmar_produccion`).
+5. **Recepción real verificada en SRI de certificación: RECIBIDA ✅** (estructura + firma válidas; el bug de leyenda RIMPE vacía se corrigió).
+6. **Frontend:** sección Facturación (`/facturacion`) con 5 estados, botón "Transmitir al SRI", modal de errores SRI, columna de autorización; botón "Factura SRI" en OrdenDetalle.
+7. **Migración:** `backend/migraciones/2026_08_28_autorizacion_sri.sql` (columnas `numero_autorizacion`, `fecha_autorizacion`).
+8. **40 tests verdes** en `backend/tests/`.
+9. **Factura de prueba `001-001-000000001` (id 13)** transmitida el 28/08/2026 → estado `recibida`. **Dejada en BD por decisión de Daniel** como evidencia.
+
+**Pendiente para producción real (validez fiscal):**
+- [ ] Pagar declaraciones IVA pendientes (Abr, Jun, Jul 2026) — ver `~/recordatorios-registro/sri-declaracion-iva-2025-2026.md`
+- [ ] Restablecer clave del portal SRI (expirada)
+- [ ] Verificar/renovar permiso de facturación (~3 meses de vigencia)
+- [ ] Transmitir factura en ambiente 2 → verificar `AUTORIZADO` con número real
+
+**Nota régimen:** el emisor es régimen general desde ~jul/2026 (recategorización SRI); IR 2026 volverá al Formulario 102.
+
+---
+
 ## 📅 Sesión: 5 de Mayo 2026
 
 ### FASE 3.5: Configuración de Passwords ✅ COMPLETADA
@@ -422,5 +450,24 @@ psql -U skorggamor -d orpey_db
 
 ---
 
-*Última actualización: 5 de Mayo 2026 — Sesión Antigravity (Frontend)*
+*Última actualización: 28 de Agosto 2026 — Sesión Facturación Electrónica SRI (Fase 6)*
 
+
+---
+
+## Sesión 29/08/2026 — QA Anulación (Nota de Crédito) E2E ✅
+
+### Ganado hoy
+- **Botón "Anular" implementado y probado en vivo** (frontend: modal con motivo + monto parcial, badge Anulada/Anulada Parcial, columna "Factura Anulada").
+- **3 bugs reales resueltos contra el SRI de certificación** (ver FACTURACION-SRI.md):
+  1. `numDocModificado` debe ser `001-001-000000001` (no la clave de acceso).
+  2. Montos de NC **positivos** (XSD minInclusive 0.0) — se invirtió la decisión previa.
+  3. `direccionComprador` requires minLength 1 → fallback "SIN DIRECCIÓN REGISTRADA".
+- **Regla [70]** CLAVE EN PROCESAMIENTO ≠ rechazo: normalizada a EN PROCESO/RECIBIDA (afecta reenvíos y consultas inmediatas).
+- QA completo: factura nueva → RECIBIDA → anular → NC RECIBIDA → factura `anulada`. BD limpiada (solo queda factura 13).
+- Suite: **64 tests verdes** (2 nuevos: [70] recepción y autorización).
+
+### Pendientes (sin cambios de código)
+- Regularizar SRI: IVA Abr/Jun/Jul 2026, clave portal, permiso de facturación (~3 meses vigencia).
+- (Opcional futuro) Endpoint "regenerar XML" para re-firmar comprobantes devueltos por estructura.
+- (Opcional futuro) Confirmar con el SRI el `codigoPorcentaje` vigente (13% vs 15%) antes de producción.

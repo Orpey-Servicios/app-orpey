@@ -1,1 +1,12 @@
+/* Estilos Notas de Venta */
 .notas-pagina { padding: 0 32px 32px; }
+
+/* Banner de feedback: nota creada recientemente */
+.notas-aviso-exito {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: var(--color-exito-fondo);
+  border: 1px solid #BBF7D0; border-radius: var(--borde-radio);
+  color: var(--color-exito); font-weight: 600; font-size: var(--fuente-tamano-sm);
+}
+.notas-aviso-exito .boton-icono { margin-left: auto; color: var(--color-exito); }

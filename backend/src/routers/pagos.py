@@ -18,8 +18,10 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.database import get_db
-from src.models.models import OrdenServicio, PagoOrden, EquipoOrden
+from src.models.models import OrdenServicio, PagoOrden, EquipoOrden, MovimientoCaja, Usuario
 from src.schemas.schemas import PagoCreate, PagoResponse
+from src.services import caja_service
+from src.utils.auth import get_current_user
 
 router = APIRouter(
     prefix="/api/ordenes",
@@ -37,17 +39,28 @@ router = APIRouter(
 async def registrar_pago(
     orden_id: int,
     datos: PagoCreate,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
 ):
     """
     Registra un pago para una orden.
 
     **¿Qué hace este endpoint?**
     1. Verifica que la orden existe
-    2. Crea un registro en pagos_orden (historial)
-    3. Suma el monto al campo abono de la orden
-    4. Devuelve el pago registrado
+    2. Verifica que hay una caja abierta (regla de negocio: todo cobro pasa por caja)
+    3. Crea un registro en pagos_orden (historial)
+    4. Crea el movimiento de caja 'pago_orden' (MISMA transacción, atómico)
+    5. Suma el monto al campo abono de la orden
+    6. Devuelve el pago registrado
     """
+    # REGLA DE NEGOCIO: sin caja abierta no se registran pagos
+    caja = await caja_service.obtener_caja_abierta(db)
+    if not caja:
+        raise HTTPException(
+            status_code=400,
+            detail="No hay caja abierta. Abre la caja en la sección Caja antes de registrar pagos.",
+        )
+
     # Verificar que la orden existe
     result = await db.execute(
         select(OrdenServicio).where(OrdenServicio.id == orden_id)
@@ -92,8 +105,24 @@ async def registrar_pago(
     )
     db.add(nuevo_pago)
 
+    # Movimiento de caja 'pago_orden': MISMA transacción que el pago (atómico).
+    # referencia_id se asigna tras el flush (pago.id). Nunca pago sin movimiento.
+    movimiento = MovimientoCaja(
+        caja_id=caja.id,
+        tipo="ingreso",
+        origen="pago_orden",
+        monto=monto,
+        metodo_pago=nuevo_pago.metodo_pago,
+        creado_por=current_user.id,
+    )
+    db.add(movimiento)
+
+    # flush: asigna id al pago y valida FKs antes del commit
+    await db.flush()
+    movimiento.referencia_id = nuevo_pago.id
+
     # Sumar el monto al abono actual de la orden
-    orden.abono = (orden.abono or Decimal("0.00")) + monto
+    orden.abono = nuevo_abono
 
     await db.commit()
     await db.refresh(nuevo_pago)

@@ -1,0 +1,269 @@
+/* Estilos del módulo de Caja */
+.caja-pagina { padding: 0 32px 32px; }
+
+/* ── Header de la página (tipo Facturas) ── */
+.caja__header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 0 16px; gap: 16px; flex-wrap: wrap;
+}
+.caja__header h2 {
+  display: flex; align-items: center; gap: 10px;
+  font-size: var(--fuente-tamano-2xl, 24px); font-weight: 800;
+  margin: 0;
+}
+.caja__header p {
+  margin: 4px 0 0; color: var(--texto-secundario);
+  font-size: var(--fuente-tamano-sm);
+}
+
+/* ── Aviso de éxito ── */
+.caja__aviso-exito {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px; margin-bottom: 20px;
+  background: var(--color-exito-fondo);
+  border: 1px solid #BBF7D0; border-radius: var(--borde-radio);
+  color: var(--color-exito); font-weight: 600; font-size: var(--fuente-tamano-sm);
+}
+.caja__aviso-exito .boton-icono { margin-left: auto; color: var(--color-exito); }
+
+/* ── Estado principal de la caja ── */
+.caja__estado {
+  border-radius: var(--borde-radio);
+  padding: 28px 30px;
+  margin-bottom: 28px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 8px;
+}
+
+.caja__estado--cerrada {
+  background: var(--fondo-tarjeta);
+  border: 2px dashed var(--borde-color-hover);
+  color: var(--texto-principal);
+}
+.caja__estado--cerrada .caja__estado-icono {
+  width: 76px; height: 76px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--fondo-secundario); color: var(--texto-terciario);
+  margin-bottom: 8px;
+}
+.caja__estado--cerrada h3 { font-size: var(--fuente-tamano-xl); font-weight: 700; margin: 0; }
+.caja__estado--cerrada p { color: var(--texto-secundario); margin: 0; max-width: 420px; }
+.caja__estado--cerrada .boton-primario { margin-top: 14px; }
+
+.caja__hora-actual {
+  text-transform: capitalize; font-size: var(--fuente-tamano-xs);
+}
+
+/* Estado abierta: panel destacado */
+.caja__estado--abierta {
+  background: linear-gradient(135deg, #FEFCE8 0%, #FFFBEB 55%, #FEF3C7 100%);
+  border: 1px solid #FDE68A;
+  box-shadow: var(--sombra-md);
+}
+.caja__estado-badge { align-self: flex-start; margin-bottom: 4px; }
+
+.caja__badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: var(--fuente-tamano-xs); font-weight: 700; letter-spacing: 0.4px;
+  padding: 4px 12px; border-radius: 999px; text-transform: uppercase;
+  white-space: nowrap;
+}
+.caja__badge--abierta {
+  background: #BBF7D0; color: #166534;
+}
+.caja__badge--ingreso {
+  background: var(--color-exito-fondo); color: var(--color-exito);
+}
+.caja__badge--egreso {
+  background: var(--color-error-fondo); color: var(--color-error);
+}
+.caja__badge--egreso svg, .caja__badge--ingreso svg { flex-shrink: 0; }
+.caja__badge-punto {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #166534; animation: pulso 1.6s ease infinite;
+}
+
+/* Grid de datos (inicial / ingresos / egresos / esperado) */
+.caja__estado-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  width: 100%;
+  max-width: 720px;
+  margin: 12px 0;
+}
+.caja__dato {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid #FDE68A;
+  border-radius: var(--borde-radio-sm);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  text-align: left;
+}
+.caja__dato-nombre {
+  font-size: var(--fuente-tamano-xs); color: var(--texto-secundario);
+  font-weight: 500;
+}
+.caja__dato strong { font-size: var(--fuente-tamano-md); color: var(--texto-principal); }
+.caja__dato--ingreso strong { color: var(--color-exito); }
+.caja__dato--egreso strong { color: var(--color-error); }
+
+.caja__dato--esperado {
+  background: #FEF3C7; border-color: #FCD34D;
+}
+.caja__monto-grande {
+  font-size: 1.9rem !important; font-weight: 800 !important;
+  color: #B45309 !important; line-height: 1.1;
+}
+
+.caja__estado-meta {
+  font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
+}
+
+.caja__acciones {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 10px;
+  margin-top: 10px;
+}
+
+/* ── Secciones (movimientos / historial) ── */
+.caja__seccion {
+  margin-bottom: 28px;
+}
+.caja__seccion-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.caja__seccion-header h3 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fuente-tamano-md); font-weight: 600;
+  color: var(--texto-principal); margin: 0;
+}
+
+.caja__hint {
+  margin-top: 6px; font-size: var(--fuente-tamano-xs);
+  color: var(--texto-terciario); line-height: 1.4;
+}
+
+/* Montos en la tabla de movimientos */
+.caja__tabla-monto { font-weight: 700; white-space: nowrap; }
+.caja__tabla-monto--ingreso { color: var(--color-exito); }
+.caja__tabla-monto--egreso { color: var(--color-error); }
+
+/* Diferencia en historial y arqueo */
+.caja__diferencia {
+  display: inline-flex; align-items: center;
+  font-weight: 700; font-size: var(--fuente-tamano-sm);
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+}
+.caja__diferencia--cuadrada { background: var(--color-exito-fondo); color: var(--color-exito); }
+.caja__diferencia--sobra { background: var(--color-info-fondo); color: var(--color-info); }
+.caja__diferencia--falta { background: var(--color-error-fondo); color: var(--color-error); }
+
+/* ── Desglose del arqueo (modal cerrar) ── */
+.caja__arqueo {
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio-sm);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.caja__arqueo-fila {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; font-size: var(--fuente-tamano-sm);
+  border-bottom: 1px solid var(--borde-color);
+  color: var(--texto-secundario);
+}
+.caja__arqueo-fila--ingreso span:last-child { color: var(--color-exito); font-weight: 600; }
+.caja__arqueo-fila--egreso span:last-child { color: var(--color-error); font-weight: 600; }
+.caja__arqueo-total {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 14px; background: var(--fondo-secundario);
+  font-size: var(--fuente-tamano-sm); color: var(--texto-principal);
+}
+.caja__arqueo-total strong { font-size: var(--fuente-tamano-lg); }
+
+.caja__diferencia-en-vivo {
+  margin-bottom: 16px;
+}
+.caja__diferencia-en-vivo .caja__diferencia {
+  font-size: var(--fuente-tamano-base);
+  padding: 8px 14px; width: 100%; justify-content: center;
+}
+
+/* ═══════════════════════════════════════════
+   ESTADOS Y COMPONENTES BASE (hard-reload safe)
+   Duplicados del Dashboard/Clientes para que /caja
+   funcione aunque Dashboard.css no se haya cargado.
+   ═══════════════════════════════════════════ */
+
+.spinner {
+  width: 36px; height: 36px; border: 3px solid var(--borde-color);
+  border-top-color: var(--color-primario); border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+@keyframes girar { to { transform: rotate(360deg); } }
+
+.dashboard__cargando {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 40vh; gap: 16px; color: var(--texto-secundario);
+}
+
+.dashboard__error {
+  display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+  background: var(--color-error-fondo); border: 1px solid #FECACA;
+  border-radius: var(--borde-radio); color: var(--color-error); margin-bottom: 24px;
+}
+.dashboard__error p { font-size: var(--fuente-tamano-sm); margin-top: 2px; color: var(--texto-secundario); }
+
+.dashboard__vacio {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 24px; gap: 12px; color: var(--texto-terciario);
+}
+.dashboard__vacio p { color: var(--texto-secundario); }
+
+.ordenes-pagina__tabla {
+  background: var(--fondo-tarjeta); border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio); overflow: hidden;
+}
+
+.tabla { width: 100%; border-collapse: collapse; }
+.tabla th {
+  text-align: left; padding: 12px 18px; font-size: var(--fuente-tamano-xs);
+  font-weight: 600; color: var(--texto-secundario); text-transform: uppercase;
+  letter-spacing: 0.5px; background: var(--fondo-principal);
+  border-bottom: 1px solid var(--borde-color);
+}
+.tabla td {
+  padding: 12px 18px; font-size: var(--fuente-tamano-base);
+  border-bottom: 1px solid var(--borde-color); color: var(--texto-principal);
+}
+.tabla tbody tr { transition: background var(--transicion-rapida); }
+.tabla tbody tr:hover { background: rgba(251, 195, 5, 0.04); }
+.tabla tbody tr:last-child td { border-bottom: none; }
+
+.filtro-select {
+  width: auto; min-width: 160px; cursor: pointer; appearance: auto;
+}
+
+/* ── Modal overlay (Sabor A: Clientes/Facturas) ── */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--fondo-tarjeta); border-radius: var(--borde-radio-lg);
+  padding: 28px; width: 90%; max-width: 520px; max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--sombra-xl); animation: modalIn 0.25s ease;
+}
+@keyframes modalIn { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+.modal__header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+}
+.modal__header h3 { display: flex; align-items: center; gap: 8px; font-size: var(--fuente-tamano-lg); font-weight: 700; }
+
+.modal__botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
