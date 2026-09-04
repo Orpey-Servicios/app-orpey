@@ -15,7 +15,8 @@ dependencies = [
     "psycopg2-binary>=2.9.0",    # Driver alternativo para PostgreSQL
     "reportlab>=4.0.0",          # Generación de PDFs
     "python-jose[cryptography]>=3.3.0",  # JWT para autenticación
-    "passlib[bcrypt]>=1.7.4",    # Hashing de contraseñas
+    "passlib>=1.7.4",            # Hashing de contraseñas
+    "bcrypt>=3.2,<4.1",          # passlib 1.7.4 requiere bcrypt<4.1 (bcrypt>=4.1 eliminó __about__ y rompe)
     "python-multipart>=0.0.6",   # Soporte para formularios
     "lxml>=5.0.0",               # Parsing/construcción de XML (firma SRI)
     "signxml>=3.2.0",            # Firma digital XML XAdES (facturación SRI)

@@ -547,3 +547,32 @@ docker logs orpey-backend-1 --tail=50                          # logs
 - Emitir una factura real desde la interfaz en producción (verificar flujo completo desde el container).
 - Confirmar autorización de factura 21 (worker local la monitorea) y que la factura en el VPS refleje autorización.
 - IVA Mayo 2026 (reintentar tras aprobación).
+
+---
+
+## 2026-09-04 — 🔑 FIX BUG: "password cannot be longer than 72 bytes" (CAUSA RAÍZ)
+
+### Síntoma
+Al intentar login/configurar contraseña salía: `Error interno del servidor: password cannot be longer than 72 bytes` — incluso con contraseñas cortas.
+
+### Causa raíz (importante)
+**NO era la longitud de la contraseña.** Era una **incompatibilidad de versiones** en el container de producción:
+- `docker` instaló `bcrypt 5.0.0` (la más nueva)
+- `passlib 1.7.4` es **incompatible con `bcrypt >= 4.1`** (bcrypt eliminó el atributo `__about__`)
+- passlib fallaba internamente y ese error se manifestaba como el error de 72 bytes
+- Local funcionaba porque usaba `bcrypt 4.0.1` (compatible)
+
+### Solución aplicada (desplegada)
+- Fijado en `backend/pyproject.toml`: `"bcrypt>=3.2,<4.1"` (junto a `passlib>=1.7.4`)
+- Rebuild `--no-cache` del backend en el VPS → `bcrypt 4.0.1` + `passlib 1.7.4` ✅
+- Verificado: configurar-password → 200, login admin → 200 con token
+
+### Mejoras de seguridad/UX que también se implementaron
+- `validar_password()`: política de contraseñas (mín 6, máx 64 bytes) con mensajes claros en vez de error de servidor.
+- `hash_password`/`verificar_password` robustos: nunca revientan (login con error de bcrypt → credenciales inválidas, no 500).
+- Endpoint faltante `POST /api/auth/cambiar-password` creado (estaba documentado pero no existía).
+- Validación de contraseña en crear/actualizar usuario.
+
+### Acceso admin (producción)
+- Usuario: `admin` | Contraseña: `Wmah7qga.` (con punto, = password de la firma SRI)
+- Verificado login 200 OK ✅
