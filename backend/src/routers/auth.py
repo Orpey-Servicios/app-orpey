@@ -25,7 +25,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.config.database import get_db
 from src.models.models import Usuario, RolUsuario
-from src.utils.auth import hash_password, verificar_password, crear_token_acceso, decodificar_token, get_current_user
+from src.utils.auth import (
+    hash_password, verificar_password, crear_token_acceso, decodificar_token,
+    get_current_user, validar_password
+)
 from src.models.models import Usuario
 
 router = APIRouter(
@@ -182,9 +185,52 @@ async def configurar_password(
     if not usuario:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
 
+    # Validar la nueva contraseña ANTES de hashearla (mensajes claros,
+    # evita el error interno de bcrypt por contraseñas demasiado largas).
+    validar_password(password_nuevo)
+
     # Hashear la nueva contraseña
     usuario.password_hash = hash_password(password_nuevo)
 
     await db.commit()
 
     return {"mensaje": f"Contraseña configurada para el usuario {usuario.username}"}
+
+
+@router.post(
+    "/cambiar-password",
+    summary="Cambiar contraseña",
+    description="Permite a un usuario logueado cambiar su propia contraseña."
+)
+async def cambiar_password(
+    datos: CambioPasswordRequest,
+    current_user: Usuario = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Cambia la contraseña del usuario autenticado.
+
+    Requiere la contraseña actual para confirmar identidad.
+
+    **Ejemplo:**
+    ```json
+    {
+        "password_actual": "mi_contraseña_vieja",
+        "password_nuevo": "mi_contraseña_nueva_segura"
+    }
+    ```
+
+    Respuesta: mensaje de confirmación.
+    """
+    # La contraseña actual debe coincidir (identidad). verificar_password es
+    # seguro incluso con contraseñas >72 bytes (devuelve False, no error 500).
+    if not verificar_password(datos.password_actual, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta.")
+
+    # Validar y establecer la nueva contraseña con la política del sistema.
+    validar_password(datos.password_nuevo)
+    current_user.password_hash = hash_password(datos.password_nuevo)
+
+    await db.commit()
+
+    return {"mensaje": "Contraseña actualizada correctamente."}

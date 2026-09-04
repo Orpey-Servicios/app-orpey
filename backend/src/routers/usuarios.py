@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from src.config.database import get_db
 from src.models.models import Usuario, RolUsuario
-from src.utils.auth import hash_password, get_current_user, require_roles
+from src.utils.auth import hash_password, get_current_user, require_roles, validar_password
 from src.schemas.schemas import (
     UsuarioCreate, UsuarioUpdate, UsuarioResponse
 )
@@ -62,6 +62,10 @@ async def crear_usuario(
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="El username ya existe")
 
+    # Validar la contraseña antes de hashearla (mensajes claros, evita el
+    # error interno de bcrypt por contraseñas demasiado largas).
+    validar_password(datos.password)
+
     nuevo_usuario = Usuario(
         username=datos.username,
         password_hash=hash_password(datos.password),
@@ -98,6 +102,8 @@ async def actualizar_usuario(
         usuario.username = datos.username
 
     if datos.password is not None:
+        # Validar la nueva contraseña antes de hashearla.
+        validar_password(datos.password)
         usuario.password_hash = hash_password(datos.password)
 
     if datos.rol is not None:
