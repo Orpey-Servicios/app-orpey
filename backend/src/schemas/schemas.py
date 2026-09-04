@@ -145,6 +145,7 @@ class EquipoCreate(BaseModel):
     contrasena: Optional[str] = None
     descripcion_problema: str = Field(..., min_length=1)
     diagnostico: Optional[str] = None
+    servicio_id: Optional[int] = None
     trabajo_a_realizar: Optional[str] = None
     repuesto_a_instalar: Optional[str] = None
     costo: Decimal = Decimal("0.00")
@@ -160,6 +161,7 @@ class EquipoUpdate(BaseModel):
     contrasena: Optional[str] = None
     descripcion_problema: Optional[str] = None
     diagnostico: Optional[str] = None
+    servicio_id: Optional[int] = None
     trabajo_a_realizar: Optional[str] = None
     repuesto_a_instalar: Optional[str] = None
     costo: Optional[Decimal] = None
@@ -177,6 +179,7 @@ class EquipoOrdenUpdate(BaseModel):
     contrasena: Optional[str] = None
     descripcion_problema: str = Field(..., min_length=1)
     diagnostico: Optional[str] = None
+    servicio_id: Optional[int] = None
     trabajo_a_realizar: Optional[str] = None
     repuesto_a_instalar: Optional[str] = None
     costo: Decimal = Decimal("0.00")
@@ -219,6 +222,7 @@ class EquipoResponse(BaseModel):
     contrasena: Optional[str]
     descripcion_problema: str
     diagnostico: Optional[str]
+    servicio_id: Optional[int] = None
     trabajo_a_realizar: Optional[str]
     repuesto_a_instalar: Optional[str]
     costo: Decimal = Decimal("0.00")
@@ -720,3 +724,28 @@ class ResumenDiaResponse(BaseModel):
     notas_venta_hoy: Decimal = Decimal("0.00")
     pagos_hoy: Decimal = Decimal("0.00")
     ordenes_cerradas_hoy: int = 0
+
+
+# =====================================================
+# SCHEMA: CatalogoServicio
+# =====================================================
+
+class ServicioCreate(BaseModel):
+    nombre: str = Field(..., min_length=1, max_length=200)
+    costo: Decimal = Decimal("0.00")
+    activo: bool = True
+
+class ServicioUpdate(BaseModel):
+    nombre: Optional[str] = None
+    costo: Optional[Decimal] = None
+    activo: Optional[bool] = None
+
+class ServicioResponse(BaseModel):
+    id: int
+    nombre: str
+    costo: Decimal
+    activo: bool
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

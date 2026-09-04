@@ -1,6 +1,24 @@
 # FACTURACIÓN ELECTRÓNICA SRI — Módulo de Orpey Servicios
 
-> Documento maestro del módulo. Última actualización: 28/08/2026.
+> Documento maestro del módulo. Última actualización: 03/09/2026.
+
+# ✅ VERIFICADO EN VIVO (03/09/2026) — ACTIVO PARA EMITIR FACTURAS ELECTRÓNICAS
+
+**Resultado:** SÍ está autorizado como emisor electrónico (desde 30/11/2023). RUC ACTIVO. Régimen General (PERSONA NATURAL GENERAL) confirmado.
+
+**⚠️ RESTRICCIÓN:** El permiso de facturación está **RESTRINGIDO a 3 MESES** (por obligaciones tributarias pendientes). Motivo: declaraciones de IVA pendientes.
+
+**🔴 Qué lo limita (declaraciones IVA pendientes):**
+1. ABRIL 2026 — ya declarado y pagado 03/09/2026 (en aprobación bancaria)
+2. JUNIO 2026 — pendiente de declarar
+3. JULIO 2026 — pendiente de declarar
+
+**💡 Para ampliar permiso a 12 meses:** presentar las declaraciones pendientes. Mientras tanto puede emitir facturas con validez fiscal real respetando el período de 3 meses.
+
+**Conclusión app-orpey:** El módulo de facturación SÍ puede pasar a producción ahora mismo con `ambiente=2`. Una vez presentadas las 3 declaraciones, el permiso se amplía a 12 meses automáticamente.
+
+*Verificado por: @contador (agente SRI) — 03/09/2026. Detalle completo en registro Logseq.*
+---
 > Emisor: BALTODANO CATARINE DANIEL ABRAHAM — RUC **0964794234001** · **RÉGIMEN GENERAL** (verificado en SRI el 28/08/2026) · NO obligado a contabilidad.
 
 ---
@@ -75,7 +93,7 @@ app-orpey/
 |---|---|---|
 | Firma digital `.p12` | `/home/skorggamor/agente-contador/firmadigital.p12` | `configuracion_sistema.firma_p12_ruta` |
 | Password firma | `Wmah7qga.` **(con punto final)** | `~/agente-contador/.firma_p12.pass` (perms 600) — NO versionar |
-| Password portal SRI | `vxvgu5mkWmah7qga.` (con punto) | `~/agente-contador/SESION-SRI.md` ⚠️ **clave expirada según verificación 28/08** |
+| Password portal SRI | `Wmah7qga8360047@` | `~/agente-contador/SESION-SRI.md` ✅ **actualizada 02/09/2026** |
 
 ---
 

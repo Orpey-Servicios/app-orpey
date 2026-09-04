@@ -7,12 +7,13 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, ArrowLeft, Search, UserPlus, X, FileDown, MessageCircle, CheckCircle, Plus, Settings2 } from 'lucide-react';
+import { Save, ArrowLeft, Search, UserPlus, X, FileDown, MessageCircle, CheckCircle, Plus, Settings2, Edit2, Check } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   obtenerClientes, obtenerTecnicos, crearOrden, obtenerOrden, actualizarOrden,
-  crearCliente, descargarPdfOrden, obtenerWhatsappOrden
+  crearCliente, descargarPdfOrden, obtenerWhatsappOrden, obtenerServicios, crearServicio
 } from '../api/orpey-api';
+import CreatableSelect from 'react-select/creatable';
 import './OrdenFormulario.css';
 
 const TIPOS_EQUIPO = [
@@ -52,7 +53,31 @@ const MARCAS_DEFECTO = {
 };
 
 const MODELOS_DEFECTO = {
-  pc_escritorio: {}, laptop: {}, impresora: {}, telefono: {}, otro: {}
+  pc_escritorio: {
+    "HP": { "ProDesk": true, "EliteDesk": true, "Pavilion": true },
+    "Dell": { "OptiPlex": true, "Inspiron": true, "XPS": true },
+    "Lenovo": { "ThinkCentre": true, "IdeaCentre": true }
+  }, 
+  laptop: {
+    "HP": { "Pavilion": true, "Envy": true, "Spectre": true, "ProBook": true, "EliteBook": true },
+    "Dell": { "Inspiron": true, "XPS": true, "Latitude": true, "Alienware": true },
+    "Lenovo": { "ThinkPad": true, "IdeaPad": true, "Yoga": true, "Legion": true },
+    "ASUS": { "ZenBook": true, "VivoBook": true, "ROG": true, "TUF": true },
+    "Acer": { "Aspire": true, "Predator": true, "Nitro": true, "Swift": true },
+    "Apple": { "MacBook Air": true, "MacBook Pro": true }
+  }, 
+  impresora: {
+    "Epson": { "L3110": true, "L3150": true, "L3210": true, "L3250": true, "L4150": true, "L4260": true },
+    "HP": { "LaserJet Pro": true, "DeskJet": true, "Smart Tank": true, "OfficeJet": true },
+    "Canon": { "PIXMA G2110": true, "PIXMA G3110": true, "PIXMA G4110": true },
+    "Brother": { "DCP-T310": true, "DCP-T510W": true, "HL-1212W": true }
+  }, 
+  telefono: {
+    "Apple": { "iPhone 11": true, "iPhone 12": true, "iPhone 13": true, "iPhone 14": true, "iPhone 15": true },
+    "Samsung": { "Galaxy S21": true, "Galaxy S22": true, "Galaxy S23": true, "Galaxy A54": true, "Galaxy A34": true, "Galaxy A14": true },
+    "Xiaomi": { "Redmi Note 11": true, "Redmi Note 12": true, "Redmi Note 13": true, "POCO X5": true }
+  }, 
+  otro: {}
 };
 
 function getStoredData(key, defaults) {
@@ -126,7 +151,7 @@ export default function OrdenFormulario() {
     equipos: [{
       tipo_equipo: 'laptop', marca: '', modelo: '',
       cable: false, cargador: false, contrasena: '', descripcion_problema: '', diagnostico: '',
-      trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
+      servicio_id: null, trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
     }]
   });
 
@@ -137,6 +162,7 @@ export default function OrdenFormulario() {
   const [clienteSeleccionado, setClienteSeleccionado] = useState(null);
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
+  const [catalogoServicios, setCatalogoServicios] = useState([]);
 
   // ── Estado: panel de nuevo cliente ──────────────────────────────────
   const [mostrarFormCliente, setMostrarFormCliente] = useState(false);
@@ -153,6 +179,8 @@ export default function OrdenFormulario() {
   const [modalConfig, setModalConfig] = useState({ abierto: false, tipo: 'marca', equipo: '', marca: '' });
   const [nuevoItemConfig, setNuevoItemConfig] = useState('');
   const [marcaEnModal, setMarcaEnModal] = useState('');
+  const [editandoItem, setEditandoItem] = useState(null);
+  const [valorEdicion, setValorEdicion] = useState('');
 
   useEffect(() => {
     setStoredData('orpey_marcas', marcasPersonalizadas);
@@ -214,15 +242,55 @@ const eliminarItemConfig = (itemStr) => {
   }
 };
 
+const guardarEdicionConfig = (itemStrViejo) => {
+  const { tipo, equipo } = modalConfig;
+  const nuevoValor = valorEdicion.trim();
+  
+  if (!nuevoValor) {
+    setEditandoItem(null);
+    return;
+  }
+  
+  if (tipo === 'marca') {
+    setMarcasPersonalizadas(prev => {
+      const lista = prev[equipo] || [];
+      return { ...prev, [equipo]: lista.map(i => i === itemStrViejo ? nuevoValor : i) };
+    });
+  } else {
+    // Modelos
+    const sepIdx = itemStrViejo.indexOf('||');
+    const itemBrand = itemStrViejo.slice(0, sepIdx);
+    const itemModel = itemStrViejo.slice(sepIdx + 2);
+    
+    if (nuevoValor === itemModel) {
+      setEditandoItem(null);
+      return;
+    }
+    
+    setModelosPersonalizados(prev => {
+      const tipoModels = { ...(prev[equipo] || {}) };
+      if (tipoModels[itemBrand]) {
+        const brandModels = { ...tipoModels[itemBrand] };
+        delete brandModels[itemModel];
+        brandModels[nuevoValor] = true;
+        tipoModels[itemBrand] = brandModels;
+      }
+      return { ...prev, [equipo]: tipoModels };
+    });
+  }
+  setEditandoItem(null);
+};
+
   useEffect(() => { cargarDatosIniciales(); }, []);
 
   async function cargarDatosIniciales() {
     try {
-      const [clientesData, tecnicosData] = await Promise.all([
-        obtenerClientes(), obtenerTecnicos()
+      const [clientesData, tecnicosData, serviciosData] = await Promise.all([
+        obtenerClientes(), obtenerTecnicos(), obtenerServicios()
       ]);
       setClientes(clientesData);
       setTecnicos(tecnicosData);
+      setCatalogoServicios(serviciosData);
 
       if (esEdicion) {
         const orden = await obtenerOrden(Number(id));
@@ -235,7 +303,7 @@ const eliminarItemConfig = (itemStr) => {
             : [{
               tipo_equipo: 'laptop', marca: '', modelo: '',
               cable: false, cargador: false, contrasena: '', descripcion_problema: '', diagnostico: '',
-              trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
+              servicio_id: null, trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
             }]
         });
         const cliente = clientesData.find(c => c.id === orden.cliente_id);
@@ -300,13 +368,40 @@ const eliminarItemConfig = (itemStr) => {
     });
   }
 
+  const handleCrearServicio = async (inputValue, index) => {
+    try {
+      setGuardando(true);
+      // Asume un costo por defecto de 0 al crearlo desde aquí
+      const nuevoSrv = await crearServicio({ nombre: inputValue, costo: 0 });
+      setCatalogoServicios(prev => [...prev, nuevoSrv]);
+      
+      // Auto-seleccionar el servicio recién creado
+      setForm(prev => {
+        const nuevosEquipos = [...prev.equipos];
+        nuevosEquipos[index] = { 
+          ...nuevosEquipos[index], 
+          servicio_id: nuevoSrv.id,
+          trabajo_a_realizar: nuevoSrv.nombre,
+          costo: parseFloat(nuevoSrv.costo).toFixed(2)
+        };
+        const totalEquipos = nuevosEquipos.reduce((sum, eq) => sum + (Number(eq.costo) || 0), 0);
+        const totalAbono = nuevosEquipos.reduce((sum, eq) => sum + (Number(eq.abono_equipo) || 0), 0);
+        return { ...prev, equipos: nuevosEquipos, total_orden: totalEquipos.toFixed(2), abono: totalAbono.toFixed(2) };
+      });
+    } catch (err) {
+      setError('Error al crear el servicio: ' + err.message);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
   function agregarEquipo() {
     setForm(prev => ({
       ...prev,
       equipos: [...prev.equipos, {
         tipo_equipo: 'laptop', marca: '', modelo: '',
         cable: false, cargador: false, contrasena: '', descripcion_problema: '', diagnostico: '',
-        trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
+        servicio_id: null, trabajo_a_realizar: '', repuesto_a_instalar: '', costo: '0.00', abono_equipo: '0.00'
       }]
     }));
   }
@@ -900,7 +995,87 @@ const eliminarItemConfig = (itemStr) => {
                 <textarea className="campo-texto" rows={2} placeholder="Resultado de la revisión técnica" value={equipo.diagnostico} onChange={(e) => actualizarCampoEquipo(index, 'diagnostico', e.target.value)} />
               </div>
               <div className="campo-grupo">
-                <label className="campo-label">Trabajo a Realizar</label>
+                <label className="campo-label">Servicio a Realizar (Catálogo)</label>
+                <CreatableSelect
+                  isMulti
+                  isClearable
+                  placeholder="Buscar o crear servicio..."
+                  options={catalogoServicios.map(s => ({ value: s.id, label: `${s.nombre} - $${parseFloat(s.costo).toFixed(2)}`, srv: s }))}
+                  value={
+                    equipo.servicios_multi
+                      ? equipo.servicios_multi.map(id => {
+                          const s = catalogoServicios.find(cs => cs.id === id);
+                          return s ? { value: s.id, label: `${s.nombre} - $${parseFloat(s.costo).toFixed(2)}`, srv: s } : null;
+                        }).filter(Boolean)
+                      : equipo.servicio_id
+                        ? [{ 
+                            value: equipo.servicio_id, 
+                            label: catalogoServicios.find(s => s.id === equipo.servicio_id) ? 
+                                   `${catalogoServicios.find(s => s.id === equipo.servicio_id).nombre} - $${parseFloat(catalogoServicios.find(s => s.id === equipo.servicio_id).costo).toFixed(2)}` : '' 
+                          }]
+                        : []
+                  }
+                  onChange={(selectedOptions) => {
+                    if (selectedOptions && selectedOptions.length > 0) {
+                      const primerSrv = selectedOptions[0].srv;
+                      const nombresConcatenados = selectedOptions.map(opt => opt.srv.nombre).join(' + ');
+                      const costoTotal = selectedOptions.reduce((sum, opt) => sum + Number(opt.srv.costo), 0);
+                      
+                      setForm(prev => {
+                        const nuevosEquipos = [...prev.equipos];
+                        nuevosEquipos[index] = { 
+                          ...nuevosEquipos[index], 
+                          servicio_id: primerSrv.id,
+                          servicios_multi: selectedOptions.map(opt => opt.srv.id),
+                          trabajo_a_realizar: nombresConcatenados,
+                          costo: parseFloat(costoTotal).toFixed(2)
+                        };
+                        if (Number(nuevosEquipos[index].abono_equipo) > Number(nuevosEquipos[index].costo)) {
+                          nuevosEquipos[index].abono_equipo = nuevosEquipos[index].costo;
+                        }
+                        const totalEquipos = nuevosEquipos.reduce((sum, eq) => sum + (Number(eq.costo) || 0), 0);
+                        const totalAbono = nuevosEquipos.reduce((sum, eq) => sum + (Number(eq.abono_equipo) || 0), 0);
+                        return { ...prev, equipos: nuevosEquipos, total_orden: totalEquipos.toFixed(2), abono: totalAbono.toFixed(2) };
+                      });
+                    } else {
+                      actualizarCampoEquipo(index, 'servicio_id', null);
+                      actualizarCampoEquipo(index, 'servicios_multi', []);
+                      actualizarCampoEquipo(index, 'trabajo_a_realizar', '');
+                    }
+                  }}
+                  onCreateOption={(inputValue) => handleCrearServicio(inputValue, index)}
+                  formatCreateLabel={(inputValue) => `Crear nuevo servicio: "${inputValue}"`}
+                  className="react-select-container"
+                  classNamePrefix="react-select"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: 'var(--borde-radio-sm)',
+                      borderColor: 'var(--borde-color)',
+                      minHeight: '44px',
+                      backgroundColor: 'var(--fondo-input, #ffffff)'
+                    }),
+                    menu: (base) => ({ 
+                      ...base, 
+                      zIndex: 100, 
+                      backgroundColor: 'var(--fondo-tarjeta, #ffffff)',
+                      border: '1px solid var(--borde-color)'
+                    }),
+                    option: (base, state) => ({ 
+                      ...base, 
+                      backgroundColor: state.isFocused ? 'var(--color-primario-sutil, #f0fdf4)' : 'transparent', 
+                      color: 'var(--texto-principal, #1F2937)',
+                      cursor: 'pointer'
+                    }),
+                    singleValue: (base) => ({ ...base, color: 'var(--texto-principal, #1F2937)' }),
+                    multiValue: (base) => ({ ...base, backgroundColor: 'var(--color-primario-claro)' }),
+                    multiValueLabel: (base) => ({ ...base, color: 'var(--color-oscuro)' }),
+                    input: (base) => ({ ...base, color: 'var(--texto-principal, #1F2937)' })
+                  }}
+                />
+              </div>
+              <div className="campo-grupo">
+                <label className="campo-label">Trabajo a Realizar (Detalle)</label>
                 <textarea className="campo-texto" rows={2} placeholder="¿Qué se va a hacer?" value={equipo.trabajo_a_realizar} onChange={(e) => actualizarCampoEquipo(index, 'trabajo_a_realizar', e.target.value)} />
               </div>
               <div className="campo-grupo">
@@ -1075,7 +1250,7 @@ const eliminarItemConfig = (itemStr) => {
       {/* Modal de Configuración de Marcas/Modelos */}
       {modalConfig.abierto && (
         <div className="modal-exito-overlay animar-entrada">
-          <div className="modal-exito" style={{ maxWidth: '400px', width: '90%' }}>
+          <div className="modal-exito" style={{ maxWidth: '500px', width: '90%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
               <h3 className="modal-exito__titulo" style={{ fontSize: '18px', textAlign: 'left' }}>
                 Configurar {modalConfig.tipo === 'marca' ? 'Marcas' : 'Modelos'}
@@ -1137,16 +1312,43 @@ const eliminarItemConfig = (itemStr) => {
                   }
                   return items.map((item, idx) => (
                     <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', background: 'var(--fondo-principal)', borderRadius: 'var(--borde-radio-sm)' }}>
-                      <span style={{ fontSize: '14px' }}>{item}</span>
-                      <button type="button" onClick={() => eliminarItemConfig(item)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Eliminar">
-                        <X size={14} />
-                      </button>
+                      {editandoItem === item ? (
+                        <div style={{ display: 'flex', flex: 1, gap: '8px', marginRight: '8px' }}>
+                          <input 
+                            type="text" 
+                            className="campo-texto" 
+                            style={{ padding: '2px 8px', minHeight: '28px', fontSize: '13px' }}
+                            value={valorEdicion} 
+                            onChange={e => setValorEdicion(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter') guardarEdicionConfig(item); }}
+                            autoFocus
+                          />
+                          <button type="button" onClick={() => guardarEdicionConfig(item)} style={{ background: 'var(--color-exito)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '0 6px' }} title="Guardar">
+                            <Check size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '14px', flex: 1 }}>{item}</span>
+                      )}
+                      
+                      {!editandoItem && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button type="button" onClick={() => { setEditandoItem(item); setValorEdicion(item); }} style={{ background: 'none', border: 'none', color: 'var(--texto-secundario)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Editar">
+                            <Edit2 size={14} />
+                          </button>
+                          <button type="button" onClick={() => eliminarItemConfig(item)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Eliminar">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ));
                 } else {
-                  // Modelos: mostrar agrupados por marca
+                  // Modelos: mostrar agrupados por marca, filtrando según lo escrito en el input
                   const modelos = modelosPersonalizados[modalConfig.equipo] || {};
-                  const entradas = Object.entries(modelos);
+                  const entradas = Object.entries(modelos).filter(([brand]) => 
+                    !marcaEnModal.trim() || brand.toLowerCase() === marcaEnModal.toLowerCase().trim()
+                  );
                   if (entradas.length === 0) {
                     return <p style={{ fontSize: '13px', color: 'var(--texto-secundario)', textAlign: 'center', padding: '20px 0' }}>No hay elementos guardados.</p>;
                   }
@@ -1154,14 +1356,41 @@ const eliminarItemConfig = (itemStr) => {
                     <div key={brand} style={{ fontWeight: 700, fontSize: '13px', padding: '8px 8px 2px 8px', color: 'var(--texto-secundario)', borderBottom: '1px solid var(--borde-color)', marginBottom: '4px' }}>
                       {brand}
                     </div>,
-                    ...Object.keys(models).map(modelo => (
-                      <div key={`${brand}||${modelo}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 12px 4px 24px', background: 'var(--fondo-principal)', borderRadius: 'var(--borde-radio-sm)' }}>
-                        <span style={{ fontSize: '14px' }}>{modelo}</span>
-                        <button type="button" onClick={() => eliminarItemConfig(`${brand}||${modelo}`)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Eliminar">
-                          <X size={14} />
-                        </button>
+                    ...Object.keys(models).map(modelo => {
+                      const itemKey = `${brand}||${modelo}`;
+                      return (
+                      <div key={itemKey} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 12px 4px 24px', background: 'var(--fondo-principal)', borderRadius: 'var(--borde-radio-sm)' }}>
+                        {editandoItem === itemKey ? (
+                          <div style={{ display: 'flex', flex: 1, gap: '8px', marginRight: '8px' }}>
+                            <input 
+                              type="text" 
+                              className="campo-texto" 
+                              style={{ padding: '2px 8px', minHeight: '28px', fontSize: '13px' }}
+                              value={valorEdicion} 
+                              onChange={e => setValorEdicion(e.target.value)}
+                              onKeyDown={e => { if (e.key === 'Enter') guardarEdicionConfig(itemKey); }}
+                              autoFocus
+                            />
+                            <button type="button" onClick={() => guardarEdicionConfig(itemKey)} style={{ background: 'var(--color-exito)', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', padding: '0 6px' }} title="Guardar">
+                              <Check size={14} />
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '14px', flex: 1 }}>{modelo}</span>
+                        )}
+                        
+                        {!editandoItem && (
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button type="button" onClick={() => { setEditandoItem(itemKey); setValorEdicion(modelo); }} style={{ background: 'none', border: 'none', color: 'var(--texto-secundario)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Editar">
+                              <Edit2 size={14} />
+                            </button>
+                            <button type="button" onClick={() => eliminarItemConfig(itemKey)} style={{ background: 'none', border: 'none', color: 'var(--color-error)', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '4px' }} title="Eliminar">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    ))
+                    )})
                   ]);
                 }
               })()}

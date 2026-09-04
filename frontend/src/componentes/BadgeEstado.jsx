@@ -18,6 +18,7 @@ const ESTADOS = {
   terminada:           { etiqueta: 'Reparado',           clase: 'badge--verde' },
   entregada:           { etiqueta: 'Entregado',          clase: 'badge--gris' },
   no_hubo_solucion:    { etiqueta: 'No Hubo Solución',   clase: 'badge--rojo' },
+  cancelada:           { etiqueta: 'Cancelada',          clase: 'badge--cancelada' },
   // Estados de cotización
   abierta:             { etiqueta: 'Abierta',            clase: 'badge--azul' },
   cerrada:             { etiqueta: 'Cerrada',            clase: 'badge--gris' },

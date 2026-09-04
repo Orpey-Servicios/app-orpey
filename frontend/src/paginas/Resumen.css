@@ -1,0 +1,131 @@
+.resumen-pagina {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.resumen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.resumen-header h2 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-primario);
+}
+
+.resumen-filtros {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.resumen-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.resumen-tarjeta {
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio);
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: var(--sombra-sm);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.resumen-tarjeta:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--sombra-md);
+}
+
+.resumen-tarjeta__icono {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.resumen-tarjeta__info {
+  display: flex;
+  flex-direction: column;
+}
+
+.resumen-tarjeta__valor {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--color-oscuro);
+  line-height: 1.2;
+}
+
+.resumen-tarjeta__titulo {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.resumen-charts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.chart-container {
+  background: var(--fondo-principal);
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio);
+  padding: 20px;
+  box-shadow: var(--sombra-sm);
+}
+
+.chart-container h3 {
+  margin: 0 0 20px 0;
+  font-size: 16px;
+  color: var(--color-oscuro);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-wrapper {
+  height: 300px;
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .resumen-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .resumen-filtros {
+    width: 100%;
+    flex-direction: column;
+  }
+  
+  .resumen-filtros select {
+    width: 100%;
+  }
+
+  .resumen-charts {
+    grid-template-columns: 1fr;
+  }
+}

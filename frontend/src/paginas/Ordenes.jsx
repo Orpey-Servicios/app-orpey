@@ -23,6 +23,7 @@ const ESTADOS = [
   { valor: 'terminada', etiqueta: 'Reparado' },
   { valor: 'entregada', etiqueta: 'Entregado' },
   { valor: 'no_hubo_solucion', etiqueta: 'No Hubo Solución' },
+  { valor: 'cancelada', etiqueta: 'Cancelada' },
 ];
 
 const TIPOS_EQUIPO = [
@@ -143,17 +144,21 @@ export default function Ordenes() {
             <tbody>
               {ordenesFiltradas.map((orden) => {
                 const porCancelar = Number(orden.total_orden) - Number(orden.abono);
+                const esCancelada = orden.estado === 'cancelada' || orden.equipos?.some(e => e.estado === 'cancelada');
                 return (
-                  <tr key={orden.id} onClick={() => navigate(`/ordenes/${orden.id}`)} className="tabla__fila-click">
+                  <tr key={orden.id} onClick={() => navigate(`/ordenes/${orden.id}`)} className={`tabla__fila-click ${esCancelada ? 'tabla__fila-cancelada' : ''}`}>
                     <td><strong>{orden.numero_orden}</strong></td>
                     <td>{orden.cliente ? `${orden.cliente.nombre} ${orden.cliente.apellido}` : '—'}</td>
                     <td>{orden.equipos?.map(e => tipoEquipoTexto[e.tipo_equipo] || e.tipo_equipo).join(', ') || '—'}</td>
                     <td>{orden.equipos?.map(e => [e.marca, e.modelo].filter(Boolean).join(' ')).filter(Boolean).join(', ') || '—'}</td>
                     <td>
                       <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
-                        {orden.equipos?.length > 0 
-                          ? orden.equipos.map((e, idx) => <BadgeEstado key={idx} estado={e.estado} />)
-                          : <BadgeEstado estado={orden.estado} />
+                        {orden.estado === 'cancelada' 
+                          ? <BadgeEstado estado="cancelada" />
+                          : (orden.equipos?.length > 0 
+                              ? orden.equipos.map((e, idx) => <BadgeEstado key={idx} estado={e.estado} />)
+                              : <BadgeEstado estado={orden.estado} />
+                            )
                         }
                       </div>
                     </td>

@@ -12,7 +12,7 @@ import {
   ArrowLeft, Edit, FileDown, MessageCircle, Receipt,
   Trash2, User, Wrench, Calendar, Shield, Save, X, DollarSign,
   Plus, Clock, MessageSquare, UserCheck, CreditCard, ListChecks,
-  Pencil, History, FileCheck2, Ban
+  Pencil, History, FileCheck2, Ban, RotateCcw
 } from 'lucide-react';
 import {
   obtenerOrden, obtenerCliente, obtenerTecnico, actualizarEquipo,
@@ -182,9 +182,9 @@ export default function OrdenDetalle() {
     } catch (err) { setError(err.message); }
   }
 
-  // Eliminar orden
+  // Cancelar orden (soft delete — mantiene el correlativo)
   async function borrarOrden() {
-    if (!confirm('¿Eliminar esta orden? Esta acción no se puede deshacer.')) return;
+    if (!confirm('¿Cancelar esta orden? Quedará registrada como CANCELADA para no alterar el correlativo de órdenes.')) return;
     try {
       await eliminarOrden(Number(id));
       navigate('/ordenes');
@@ -332,6 +332,7 @@ export default function OrdenDetalle() {
   if (!orden) return <div className="dashboard__vacio"><p>Orden no encontrada</p></div>;
 
   const porCancelar = Number(orden.total_orden) - Number(orden.abono);
+  const esCancelada = orden.estado === 'cancelada' || orden.equipos?.some(e => e.estado === 'cancelada');
   const facturaOrden = facturas.find(f => Number(f.orden_servicio_id) === Number(id));
   const tieneFactura = Boolean(facturaOrden);
   const facturaAutorizada = Boolean(facturaOrden?.estado_sri === 'autorizado' && facturaOrden?.numero_autorizacion);
@@ -354,7 +355,7 @@ export default function OrdenDetalle() {
         <div className="orden-detalle__header-acciones">
           <button className="boton-secundario" onClick={() => descargarPdfOrden(Number(id))} title="Descargar PDF"><FileDown size={18} /> PDF</button>
           <button className="boton-secundario" onClick={enviarWhatsapp} title="Enviar por WhatsApp" style={{ color: '#25D366' }}><MessageCircle size={18} /> WhatsApp</button>
-          <button className="boton-secundario" onClick={convertirNotaVenta} title="Nota de Venta"><Receipt size={18} /> Nota Venta</button>
+          <button className="boton-secundario" onClick={convertirNotaVenta} title="Nota de Venta" disabled={esCancelada} style={esCancelada ? {opacity: 0.5, cursor: 'not-allowed'} : {}}><Receipt size={18} /> Nota Venta</button>
           
 {facturaAnulada ? (
               <Link to="/facturacion" className="btn-card-accion" title={facturaOrden.estado_sri === 'anulada_parcial'
@@ -391,9 +392,14 @@ export default function OrdenDetalle() {
             </button>
           )}
 
-          <button className="boton-primario" onClick={() => navigate(`/ordenes/${id}/editar`)}><Edit size={18} /> Editar</button>
-          {(usuario?.rol === 'admin' || usuario?.rol === 'asistente') && (
-            <button className="boton-icono" onClick={borrarOrden} style={{ color: 'var(--color-error)' }} title="Eliminar"><Trash2 size={18} /></button>
+          <button className="boton-primario" onClick={() => navigate(`/ordenes/${id}/editar`)} disabled={esCancelada} style={esCancelada ? {opacity: 0.5, cursor: 'not-allowed'} : {}}><Edit size={18} /> Editar</button>
+          {(usuario?.rol === 'admin' || usuario?.rol === 'asistente') && !esCancelada && (
+            <button className="boton-icono" onClick={borrarOrden} style={{ color: 'var(--color-error)' }} title="Cancelar orden (mantiene el correlativo)"><Ban size={18} /> Cancelar</button>
+          )}
+          {esCancelada && (
+            <span className="boton-secundario" style={{ color: 'var(--texto-secundario)', borderStyle: 'dashed' }} disabled>
+              <Ban size={18} /> Orden CANCELADA
+            </span>
           )}
         </div>
       </div>
@@ -589,7 +595,13 @@ export default function OrdenDetalle() {
             </div>
 
             <div className="orden-detalle__estados" style={{ marginBottom: '20px' }}>
+              {esCancelada ? (
+                <span className="orden-detalle__estados-label" style={{ color: 'var(--texto-secundario)', fontWeight: 600 }}>
+                  ⛔ Esta orden fue CANCELADA. No se pueden cambiar los estados.
+                </span>
+              ) : (
               <span className="orden-detalle__estados-label">Cambiar estado del equipo:</span>
+              )}
               {(() => {
                 // Verificar si la ORDEN está completamente pagada
                 // Fuente de verdad: abono vs total_orden
@@ -600,6 +612,7 @@ export default function OrdenDetalle() {
 
                 return (
                   <>
+                    {!esCancelada && (
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {ESTADOS.map(est => {
                         const esEntregado = est === 'entregada';
@@ -621,7 +634,8 @@ export default function OrdenDetalle() {
                         );
                       })}
                     </div>
-                    {!ordenPagada && (
+                    )}
+                    {!esCancelada && !ordenPagada && (
                       <p style={{ fontSize: '11px', color: 'var(--color-error)', marginTop: '8px', marginBottom: 0 }}>
                         ⚠️ Para entregar los equipos falta pagar <strong>${saldoOrden.toFixed(2)}</strong> (Pagado: ${abonoOrden.toFixed(2)} de ${totalOrden.toFixed(2)})
                       </p>

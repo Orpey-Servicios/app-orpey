@@ -28,3 +28,12 @@
 }
 
 .texto-pendiente { color: var(--color-error); font-weight: 600; }
+
+/* Fila cancelada: atenuada, con tachado sobre el número de orden */
+.tabla__fila-cancelada {
+  opacity: 0.55;
+}
+.tabla__fila-cancelada td:first-child strong {
+  text-decoration: line-through;
+  color: var(--texto-terciario);
+}

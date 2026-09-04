@@ -29,3 +29,5 @@
 .badge--gris .badge-estado__punto { background: #9CA3AF; }
 .badge--rojo { background: #FEF2F2; color: #DC2626; }
 .badge--rojo .badge-estado__punto { background: #EF4444; }
+.badge--cancelada { background: #F3F4F6; color: #9CA3AF; text-decoration: line-through; }
+.badge--cancelada .badge-estado__punto { background: #D1D5DB; }
