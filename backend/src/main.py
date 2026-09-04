@@ -74,6 +74,14 @@ async def lifespan(app: FastAPI):
 
 
 # Crear la aplicación FastAPI
+# NOTA SOBRE redirect_slashes (mantenido en True, valor por defecto):
+# El frontend llama a endpoints sin slash final (ej: /api/tecnicos), FastAPI
+# responde 307 a /api/tecnicos/. Ese redirect fallaba en producción porque
+# nginx enviaba "Host $host" (sin puerto), así el Location del 307 perdía el
+# :8001 y el navegador caía en el puerto 80 (ERR_CONNECTION_REFUSED), rompiendo
+# la UI (órdenes que no abren, facturas que no se ven). El fix está en
+# /opt/app-orpey/nginx/nginx.conf: proxy_set_header Host $http_host; (preserva
+# el puerto). Con eso el 307 redirige al puerto correcto y todo funciona.
 app = FastAPI(
     title="Orpey Servicios API",
     description="""
