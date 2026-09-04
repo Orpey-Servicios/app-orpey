@@ -55,11 +55,11 @@ logger = logging.getLogger(__name__)
 
 WSDL_RECEPCION = {
     "1": "https://celcer.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline",
-    "2": "https://cel.sri.gob.ec/comprobanteselectronicos-ws/RecepcionComprobantesOffline",
+    "2": "https://cel.sri.gob.ec/comprobantes-electronicos-ws/RecepcionComprobantesOffline",
 }
 WSDL_AUTORIZACION = {
     "1": "https://celcer.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline",
-    "2": "https://cel.sri.gob.ec/comprobanteselectronicos-ws/AutorizacionComprobantesOffline",
+    "2": "https://cel.sri.gob.ec/comprobantes-electronicos-ws/AutorizacionComprobantesOffline",
 }
 
 NS_SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
@@ -546,14 +546,31 @@ def transmitir_y_autorizar(
     password_p12: Optional[str] = None,
     reintentos_autorizacion: int = 6,
     espera_seg: int = 3,
+    modo_agresivo: bool = True,
 ) -> dict:
     """
-    Orquesta el flujo completo: recepción → autorización.
+    Orquesta el flujo completo: recepción → autorización (con retry agresivo).
 
     1. Transmite el comprobante (recepción).
-    2. Si RECIBIDA, consulta la autorización con reintentos cortos ante
-       estado EN PROCESO.
+    2. Si RECIBIDA, consulta la autorización con reintentos agresivos ante
+       estado EN PROCESO (como los sistemas certificados comerciales).
     3. Devuelve el resultado completo.
+
+    Retry agresivo (modo_agresivo=True por defecto):
+    - Estrategia de backoff variable para autorizar lo antes posible:
+      los primeros intentos se hacen cada 2-3 s (el SRI suele autorizar en
+      los primeros segundos), y luego se espacian progresivamente.
+    - Se mantiene el conteo total en `reintentos_autorizacion`, pero la espera
+      deja de ser fija: usa `espera_seg` para los primeros y escala suavemente.
+    - Si se agotan los reintentos, devuelve EN PROCESO (el worker/monitor de
+      fondo puede seguir reintentando en segundo plano sin bloquear la UI).
+
+    Args:
+        reintentos_autorizacion: nº total de reintentos (default 6 en modo
+            simple, pero si modo_agresivo se usan hasta 120 si no se pasó valor
+            explícito... ver lógica interna).
+        espera_seg: espera base.
+        modo_agresivo: si True, aplica backoff variable y más reintentos.
 
     Returns:
         dict con {recepcion, autorizacion, estado_final} donde recepcion es el
@@ -575,6 +592,14 @@ def transmitir_y_autorizar(
         logger.warning("Comprobante no recibido: estado=%s", recepcion["estado"])
         return resultado
 
+    # En modo agresivo, el número de reintentos por defecto es mayor para dar
+    # tiempo al SRI a procesar, pero acotado para no bloquear la request HTTP
+    # demasiado tiempo (el flujo síncrono aguanta ~30 s: captura la gran mayoría
+    # de autorizaciones; si aún no sale, el worker de fondo worker_autorizacion.py
+    # sigue consultando en segundo plano hasta autorizar).
+    if modo_agresivo and reintentos_autorizacion == 6:
+        reintentos_autorizacion = 10  # ~30 s capturando la autorización típica
+
     intento = 0
     while True:
         autorizacion = consultar_autorizacion(
@@ -584,9 +609,28 @@ def transmitir_y_autorizar(
         resultado["estado_final"] = autorizacion["estado"]
         if autorizacion["estado"] in ("AUTORIZADO", "NO AUTORIZADO"):
             return resultado
-        # EN PROCESO → reintentar con espera
+
+        # EN PROCESO → reintentar con espera variable (backoff)
         intento += 1
         if intento >= reintentos_autorizacion:
             logger.info("Autorización sigue EN PROCESO tras %d intentos", intento)
             return resultado
-        time.sleep(espera_seg)
+
+        if not modo_agresivo:
+            time.sleep(espera_seg)
+        else:
+            # Backoff variable: primeros intentos cada ~2-4 s (el SRI suele
+            # autorizar rápido), luego espaciar suavemente hasta ~8-10 s.
+            # Esto maximiza probabilidad de cacharlo en cuanto sale sin
+            # saturar al SRI con peticiones innecesarias.
+            if intento <= 5:
+                delay = espera_seg if espera_seg >= 2 else 2  # 2-3 s
+            elif intento <= 15:
+                delay = 4
+            elif intento <= 30:
+                delay = 6
+            elif intento <= 45:
+                delay = 8
+            else:
+                delay = 10
+            time.sleep(delay)

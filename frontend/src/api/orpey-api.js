@@ -779,6 +779,27 @@ export async function anularFactura(facturaId, datos) {
   }
 }
 
+/**
+ * Descargar el PDF de una factura electrónica.
+ * Abre el PDF en una nueva pestaña del navegador.
+ * @param {number} facturaId - ID de la factura
+ */
+export function descargarPdfFactura(facturaId) {
+  window.open(`${URL_BASE}/api/facturacion/${facturaId}/pdf`, '_blank');
+}
+
+/**
+ * Consultar el estado de autorización de una factura ante el SRI.
+ * Actualiza la BD si el SRI la autorizó.
+ * @param {number} facturaId - ID de la factura
+ * @returns {Promise<Object>} - { id, estado_sri, numero_autorizacion, fecha_autorizacion }
+ */
+export async function consultarAutorizacion(facturaId) {
+  return await hacerPeticion(`/api/facturacion/${facturaId}/consultar-autorizacion`, {
+    method: 'POST',
+  });
+}
+
 /* ============================================================
    CATÁLOGO DE SERVICIOS
    ============================================================ */

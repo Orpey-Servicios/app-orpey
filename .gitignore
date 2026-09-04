@@ -56,3 +56,5 @@ ORDENES_CONSOLIDADAS_FINAL.xlsx
 # Local testing
 .pytest_cache/
 .mypy_cache/
+# Logs runtime (no versionar)
+logs/

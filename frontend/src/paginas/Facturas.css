@@ -198,3 +198,22 @@
 .facturas__error-info {
   font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
 }
+
+/* Botón descargar PDF destacado cuando la factura está autorizada */
+.facturas__btn-descargar--destacado {
+  color: var(--color-exito);
+  border-color: rgba(34, 197, 94, 0.5);
+  background: #F0FDF4;
+}
+.facturas__btn-descargar--destacado:hover {
+  background: #DCFCE7; border-color: #22C55E; color: #15803D;
+}
+
+/* Icono de refresco animado mientras consulta la autorización */
+.facturas__refrescar--girando {
+  animation: facturas__girar 0.8s linear infinite;
+}
+@keyframes facturas__girar {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

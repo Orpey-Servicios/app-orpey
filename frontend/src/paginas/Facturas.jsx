@@ -6,18 +6,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FileText, FileDown, Plus, X, FileCheck2, Send, AlertTriangle,
-  UploadCloud, Ban, Info, FileX2
+  UploadCloud, Ban, Info, FileX2, RefreshCw, FileBadge
 } from 'lucide-react';
 import {
   obtenerFacturas, obtenerOrdenes, obtenerClientes,
-  generarFactura, descargarXmlFactura, transmitirFactura, anularFactura
+  generarFactura, descargarXmlFactura, descargarPdfFactura,
+  consultarAutorizacion, transmitirFactura, anularFactura
 } from '../api/orpey-api';
 import './Facturas.css';
 
 // Mapeo visual de estados SRI → clase de badge + etiqueta
 const ESTADOS_SRI = {
   firmado:         { clase: 'badge--gris',          label: 'Firmado' },
-  recibida:        { clase: 'badge--azul',          label: 'Recibida' },
+  recibida:        { clase: 'badge--naranja',      label: 'En Proceso' },
+  en_proceso:      { clase: 'badge--naranja',      label: 'En Proceso' },
   autorizado:      { clase: 'badge--verde',         label: 'Autorizado' },
   devuelta:        { clase: 'badge--rojo',          label: 'Devuelta' },
   no_autorizado:   { clase: 'badge--rojo',          label: 'No Autorizado' },
@@ -27,7 +29,8 @@ const ESTADOS_SRI = {
 
 const ESTADOS_SRI_OPCIONES = [
   { value: 'firmado', label: 'Firmado' },
-  { value: 'recibida', label: 'Recibida' },
+  { value: 'recibida', label: 'En Proceso' },
+  { value: 'en_proceso', label: 'En Proceso' },
   { value: 'autorizado', label: 'Autorizado' },
   { value: 'devuelta', label: 'Devuelta' },
   { value: 'no_autorizado', label: 'No Autorizado' },
@@ -92,6 +95,7 @@ export default function Facturas() {
   const [transmitiendo, setTransmitiendo] = useState(new Set());
   const [facturaDetalle, setFacturaDetalle] = useState(null);
   const [facturaAnular, setFacturaAnular] = useState(null);
+  const [refrescando, setRefrescando] = useState(new Set());
 
   const idsOrdenesFacturadas = useMemo(
     () => new Set(facturas.map(f => f.orden_servicio_id).filter(Boolean)),
@@ -175,6 +179,38 @@ export default function Facturas() {
       alert(err.message || 'No se pudo transmitir la factura al SRI.');
     } finally {
       setTransmitiendo(prev => {
+        const copia = new Set(prev);
+        copia.delete(factura.id);
+        return copia;
+      });
+    }
+  }
+
+  // Refrescar autorización de una factura contra el SRI (sin retransmitir)
+  async function refrescarAutorizacion(factura) {
+    const esProduccion = factura?.ambiente === '2';
+    if (esProduccion && !confirm('¿Consultar autorización en PRODUCCIÓN? Esto consulta el estado real ante el SRI.')) {
+      return;
+    }
+    setRefrescando(prev => new Set(prev).add(factura.id));
+    try {
+      const resultado = await consultarAutorizacion(factura.id);
+      if (resultado?.estado_sri) {
+        setFacturas(prev => prev.map(f =>
+          f.id === factura.id ? { ...f, ...resultado } : f
+        ));
+        if (resultado.estado_sri === 'autorizado') {
+          alert(`Factura AUTORIZADA ✓\nN° autorización: ${resultado.numero_autorizacion || '—'}`);
+        } else if (resultado.estado_sri === 'devuelta' || resultado.estado_sri === 'no_autorizado') {
+          alert(`El SRI respondió: ${ESTADOS_SRI[resultado.estado_sri]?.label || resultado.estado_sri}`);
+        } else {
+          alert(`Estado actual: ${ESTADOS_SRI[resultado.estado_sri]?.label || resultado.estado_sri}`);
+        }
+      }
+    } catch (err) {
+      alert(err.message || 'No se pudo consultar la autorización al SRI.');
+    } finally {
+      setRefrescando(prev => {
         const copia = new Set(prev);
         copia.delete(factura.id);
         return copia;
@@ -394,7 +430,24 @@ export default function Facturas() {
                             <Ban size={16} /> Anular
                           </button>
                         )}
+                        <button
+                          className={`boton-icono ${f.estado_sri === 'autorizado' ? 'facturas__btn-descargar--destacado' : ''}`}
+                          onClick={() => descargarPdfFactura(f.id)}
+                          title="Descargar PDF"
+                        >
+                          <FileBadge size={18} />
+                        </button>
                         <button className="boton-icono" onClick={() => descargarXmlFactura(f.id)} title="Descargar XML"><FileDown size={18} /></button>
+                        {(f.estado_sri === 'recibida' || f.estado_sri === 'en_proceso' || f.estado_sri === 'firmado') && (
+                          <button
+                            className="boton-icono"
+                            onClick={() => refrescarAutorizacion(f)}
+                            disabled={refrescando.has(f.id)}
+                            title={refrescando.has(f.id) ? 'Consultando autorización...' : 'Refrescar autorización'}
+                          >
+                            <RefreshCw size={18} className={refrescando.has(f.id) ? 'facturas__refrescar--girando' : ''} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

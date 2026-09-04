@@ -18,13 +18,25 @@ FLUJO (fase 2 - TRANSMISIÓN):
   producción (o viceversa) para testing.
 """
 
+import base64
+import os
 from datetime import datetime, time
 from decimal import Decimal
+from io import BytesIO
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import Response
 from pydantic import BaseModel
+from reportlab.lib import colors
+from reportlab.lib.colors import HexColor
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import (
+    HRFlowable, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle,
+)
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
@@ -48,6 +60,7 @@ from src.services.facturacion_sri import (
 )
 from src.services.transmision_sri import (
     ErrorTransmisionSRI,
+    consultar_autorizacion,
     transmitir_y_autorizar,
 )
 from src.utils.auth import get_current_user
@@ -59,6 +72,360 @@ router = APIRouter(
 
 # Ruta por defecto de la firma digital (configurable en configuracion_sistema)
 FIRMA_P12_DEFAULT = "/home/skorggamor/agente-contador/firmadigital.p12"
+
+# Colores para el PDF de factura
+_FACTURA_PRIMARY = HexColor("#FBC305")
+_FACTURA_SECONDARY = HexColor("#353534")
+_FACTURA_ACCENT = HexColor("#E5E7EB")
+_FACTURA_LIGHT = HexColor("#FFF3CC")
+_FACTURA_WHITE = HexColor("#ffffff")
+_FACTURA_DARK = HexColor("#1F2937")
+_FACTURA_GRAY = HexColor("#6B7280")
+_FACTURA_RED = HexColor("#DC2626")
+
+# Datos del emisor (contribuyente)
+_EMISOR_RAZON = "BALTODANO Catarine Daniel ABRAHAM"
+_EMISOR_RUC = "0964794234001"
+_EMISOR_DIRECCION = "Guayaquil, Bastión Popular, Bloque 2, Solar 7"
+_EMISOR_REGIMEN = "Régimen General"
+
+
+def _obtener_logo_factura(height: int = 45):
+    """Carga el logo de Orpey para el PDF de factura."""
+    rutas = [
+        "/home/skorggamor/app-orpey/frontend/dist/logo-orpey.png",
+        "/home/skorggamor/app-orpey/frontend/public/logo-orpey.png",
+        "/home/skorggamor/app-orpey/datos-orpey/logo-orpey-png.png",
+    ]
+    for ruta in rutas:
+        if os.path.exists(ruta):
+            try:
+                from reportlab.lib.utils import ImageReader
+                img = ImageReader(ruta)
+                w, h_img = img.getSize()
+                if h_img > 0:
+                    aspect = w / float(h_img)
+                    actual_width = height * aspect
+                    return Image(ruta, width=actual_width, height=height, kind='proportional')
+                return Image(ruta, width=140, height=height, kind='proportional')
+            except Exception:
+                continue
+    # Fallback: texto estilizado
+    from reportlab.platypus.flowables import Flowable
+
+    class _LogoFallback(Flowable):
+        def __init__(self, w=None, h=None, width=None, height=None):
+            Flowable.__init__(self)
+            self.width = width if width is not None else (w if w is not None else 140)
+            self.height = height if height is not None else (h if h is not None else 45)
+
+        def wrap(self, availWidth, availHeight):
+            return (self.width, self.height)
+
+        def draw(self):
+            self.canv.setFillColor(_FACTURA_SECONDARY)
+            self.canv.roundRect(0, 0, self.width, self.height, 8, fill=1, stroke=0)
+            self.canv.setFillColor(_FACTURA_PRIMARY)
+            self.canv.setFont("Helvetica-Bold", 18)
+            self.canv.drawCentredString(self.width / 2, self.height / 2 - 6, "ORPEY")
+            self.canv.setFillColor(_FACTURA_WHITE)
+            self.canv.setFont("Helvetica-Bold", 10)
+            self.canv.drawString(12, 6, "SERVICIOS Técnicos")
+
+    return _LogoFallback(width=140, height=height)
+
+
+def _generar_pdf_factura(factura, cliente, equipos=None):
+    """
+    Genera un PDF de factura electrónica con formato SRI.
+
+    Args:
+        factura: instancia de FacturaElectronica
+        cliente: instancia de Cliente (o None)
+        equipos: lista de EquipoOrden (o None)
+
+    Returns:
+        bytes del PDF generado
+    """
+    from reportlab.platypus import Image
+
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=15,
+        bottomMargin=20,
+        title=f"Factura {factura.numero_documento}",
+    )
+
+    styles = getSampleStyleSheet()
+
+    styles.add(ParagraphStyle(
+        'SeccionFac', parent=styles['Heading2'], fontName='Helvetica-Bold',
+        fontSize=10, textColor=_FACTURA_SECONDARY, spaceBefore=8, spaceAfter=4,
+    ))
+    styles.add(ParagraphStyle(
+        'CampoFac', parent=styles['Normal'], fontName='Helvetica',
+        fontSize=9, textColor=_FACTURA_DARK, spaceAfter=2,
+    ))
+    styles.add(ParagraphStyle(
+        'CampoFacR', parent=styles['CampoFac'], alignment=TA_RIGHT,
+    ))
+    styles.add(ParagraphStyle(
+        'CampoFacB', parent=styles['CampoFac'], fontName='Helvetica-Bold',
+    ))
+    styles.add(ParagraphStyle(
+        'SmallFac', parent=styles['Normal'], fontName='Helvetica',
+        fontSize=7.5, textColor=_FACTURA_GRAY, spaceAfter=1,
+    ))
+
+    es_autorizada = factura.estado_sri == "autorizado"
+    ambiente_str = "PRODUCCIÓN" if factura.ambiente == "2" else "PRUEBAS"
+
+    # --- Fecha emisión formateada ---
+    fecha_emision = factura.fecha_emision
+    fecha_str = "N/A"
+    hora_str = ""
+    if fecha_emision:
+        if isinstance(fecha_emision, str):
+            try:
+                dt = datetime.fromisoformat(fecha_emision.replace("Z", "+00:00"))
+                fecha_str = dt.strftime("%d/%m/%Y")
+                hora_str = dt.strftime("%H:%M")
+            except ValueError:
+                fecha_str = fecha_emision[:10]
+        else:
+            fecha_str = fecha_emision.strftime("%d/%m/%Y")
+            hora_str = fecha_emision.strftime("%H:%M")
+
+    contenido = []
+
+    # ===================== ENCABEZADO =====================
+    logo = _obtener_logo_factura(height=45)
+    encabezado = [
+        [
+            logo,
+            Paragraph(
+                f"<b><font color='#353534' size='12'>FACTURA</font></b><br/>"
+                f"<b><font color='#FBC305' size='11'>{factura.numero_documento}</font></b>",
+                styles['Normal'],
+            ),
+            Paragraph(
+                f"<b>Ambiente:</b> {ambiente_str}<br/>"
+                f"<b>Fecha:</b> {fecha_str}",
+                ParagraphStyle('FacFecha', parent=styles['Normal'], alignment=TA_RIGHT, leading=12),
+            ),
+        ]
+    ]
+    tabla_enc = Table(encabezado, colWidths=[150, 210, 140], hAlign='LEFT')
+    tabla_enc.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 0),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 0),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+    ]))
+    contenido.append(tabla_enc)
+    contenido.append(HRFlowable(width="100%", thickness=2, color=_FACTURA_PRIMARY, spaceBefore=6, spaceAfter=6))
+
+    # ===================== DATOS DEL EMISOR =====================
+    contenido.append(Paragraph("DATOS DEL EMISOR", styles['SeccionFac']))
+    emisor_data = [
+        [Paragraph(f"<b>Razón Social:</b> {_EMISOR_RAZON}", styles['CampoFac'])],
+        [Paragraph(f"<b>RUC:</b> {_EMISOR_RUC}", styles['CampoFac'])],
+        [Paragraph(f"<b>Dirección:</b> {_EMISOR_DIRECCION}", styles['CampoFac'])],
+        [Paragraph(f"<b>Régimen:</b> {_EMISOR_REGIMEN}", styles['CampoFac'])],
+    ]
+    t_emisor = Table(emisor_data, colWidths=[500], hAlign='LEFT')
+    t_emisor.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), _FACTURA_LIGHT),
+        ('BOX', (0, 0), (-1, -1), 0.5, _FACTURA_ACCENT),
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    contenido.append(t_emisor)
+
+    # ===================== CLAVE DE ACCESO =====================
+    contenido.append(Spacer(1, 6))
+    clave_data = [
+        [Paragraph(f"<b>Clave de Acceso:</b> {factura.clave_acceso}", styles['CampoFacB'])]
+    ]
+    t_clave = Table(clave_data, colWidths=[500], hAlign='LEFT')
+    t_clave.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), _FACTURA_LIGHT),
+        ('BOX', (0, 0), (-1, -1), 0.5, _FACTURA_ACCENT),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    contenido.append(t_clave)
+
+    # ===================== NÚMERO DE AUTORIZACIÓN =====================
+    if es_autorizada and factura.numero_autorizacion:
+        contenido.append(Spacer(1, 6))
+        fecha_aut = ""
+        if factura.fecha_autorizacion:
+            if isinstance(factura.fecha_autorizacion, str):
+                try:
+                    dt = datetime.fromisoformat(factura.fecha_autorizacion.replace("Z", "+00:00"))
+                    fecha_aut = dt.strftime("%d/%m/%Y %H:%M")
+                except ValueError:
+                    fecha_aut = str(factura.fecha_autorizacion)[:16]
+            else:
+                fecha_aut = factura.fecha_autorizacion.strftime("%d/%m/%Y %H:%M")
+        auth_data = [
+            [Paragraph(
+                f"<b><font color='#16A34A' size='11'>N° Autorización: {factura.numero_autorizacion}</font></b>",
+                styles['Normal'],
+            )],
+            [Paragraph(
+                f"<b>Fecha Autorización:</b> {fecha_aut}",
+                styles['CampoFac'],
+            )],
+        ]
+        t_auth = Table(auth_data, colWidths=[500], hAlign='LEFT')
+        t_auth.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), HexColor("#F0FDF4")),
+            ('BOX', (0, 0), (-1, -1), 0.5, HexColor("#16A34A")),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+        contenido.append(t_auth)
+
+    # ===================== DATOS DEL CLIENTE =====================
+    contenido.append(Spacer(1, 8))
+    contenido.append(Paragraph("DATOS DEL CLIENTE", styles['SeccionFac']))
+    if cliente:
+        cliente_filas = [
+            [Paragraph(f"<b>Nombre:</b> {cliente.nombre} {cliente.apellido}", styles['CampoFac'])],
+            [Paragraph(f"<b>Cédula/RUC:</b> {cliente.cedula_ruc or 'N/A'}", styles['CampoFac'])],
+        ]
+        if cliente.direccion:
+            cliente_filas.append(
+                Paragraph(f"<b>Dirección:</b> {cliente.direccion}", styles['CampoFac'])
+            )
+    else:
+        cliente_filas = [[Paragraph("<i>Cliente no especificado</i>", styles['CampoFac'])]]
+    t_cliente = Table(cliente_filas, colWidths=[500], hAlign='LEFT')
+    t_cliente.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), _FACTURA_LIGHT),
+        ('BOX', (0, 0), (-1, -1), 0.5, _FACTURA_ACCENT),
+        ('TOPPADDING', (0, 0), (-1, -1), 3),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+    ]))
+    contenido.append(t_cliente)
+
+    # ===================== DETALLE =====================
+    contenido.append(Spacer(1, 8))
+    contenido.append(Paragraph("DETALLE", styles['SeccionFac']))
+
+    header_style = ParagraphStyle(
+        'DetHdr', parent=styles['Normal'], fontName='Helvetica-Bold',
+        fontSize=8, textColor=_FACTURA_WHITE,
+    )
+    header_style_r = ParagraphStyle('DetHdrR', parent=header_style, alignment=TA_RIGHT)
+
+    tabla_det = [[
+        Paragraph("<b>Descripción</b>", header_style),
+        Paragraph("<b>Subtotal</b>", header_style_r),
+    ]]
+
+    subtotal_val = float(factura.subtotal or 0)
+    equipo_count = 0
+
+    if equipos:
+        for eq in equipos:
+            tipo_map = {
+                'pc_escritorio': 'PC', 'laptop': 'Laptop', 'impresora': 'Impresora',
+                'telefono': 'Teléfono', 'otro': 'Otro',
+            }
+            tipo_label = tipo_map.get(
+                eq.tipo_equipo.value if hasattr(eq.tipo_equipo, 'value') else str(eq.tipo_equipo),
+                'Equipo',
+            )
+            desc_parts = [tipo_label]
+            if eq.marca:
+                desc_parts.append(eq.marca)
+            if eq.modelo:
+                desc_parts.append(eq.modelo)
+            desc = " ".join(desc_parts)
+            costo = float(eq.costo or 0)
+            tabla_det.append([
+                Paragraph(desc, styles['CampoFac']),
+                Paragraph(f"$ {costo:.2f}", styles['CampoFacR']),
+            ])
+            equipo_count += 1
+
+    if equipo_count == 0:
+        tabla_det.append([
+            Paragraph("SERVICIO TÉCNICO", styles['CampoFac']),
+            Paragraph(f"$ {subtotal_val:.2f}", styles['CampoFacR']),
+        ])
+
+    total_val = float(factura.total or 0)
+    iva_val = float(factura.iva or 0)
+
+    tabla_det.append([Paragraph("", styles['CampoFac']), Paragraph("")])
+    tabla_det.append([
+        Paragraph("<b>Subtotal 15%</b>", styles['CampoFacB']),
+        Paragraph(f"<b>$ {subtotal_val:.2f}</b>", styles['CampoFacR']),
+    ])
+    tabla_det.append([
+        Paragraph("<b>IVA 15%</b>", styles['CampoFacB']),
+        Paragraph(f"<b>$ {iva_val:.2f}</b>", styles['CampoFacR']),
+    ])
+    tabla_det.append([
+        Paragraph("<b><font color='#353534' size='11'>TOTAL</font></b>", styles['Normal']),
+        Paragraph(f"<b><font color='#353534' size='11'>$ {total_val:.2f}</font></b>", styles['CampoFacR']),
+    ])
+
+    t_det = Table(tabla_det, colWidths=[350, 150])
+    estilos_det = [
+        ('BACKGROUND', (0, 0), (-1, 0), _FACTURA_SECONDARY),
+        ('TEXTCOLOR', (0, 0), (-1, 0), _FACTURA_WHITE),
+        ('GRID', (0, 0), (-1, 0), 0.5, _FACTURA_ACCENT),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 5),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
+        ('LEFTPADDING', (0, 0), (-1, -1), 8),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+    ]
+    if len(tabla_det) > 1:
+        estilos_det.append(('ROWBACKGROUNDS', (0, 1), (-1, len(tabla_det) - 4), [_FACTURA_WHITE, _FACTURA_LIGHT]))
+    num = len(tabla_det)
+    estilos_det.append(('LINEABOVE', (0, num - 3), (-1, num - 3), 0.5, _FACTURA_ACCENT))
+    estilos_det.append(('LINEABOVE', (0, num - 1), (-1, num - 1), 1.5, _FACTURA_SECONDARY))
+    estilos_det.append(('BACKGROUND', (0, num - 1), (-1, num - 1), _FACTURA_LIGHT))
+    t_det.setStyle(TableStyle(estilos_det))
+    contenido.append(t_det)
+
+    # ===================== FOOTER =====================
+    contenido.append(Spacer(1, 15))
+    contenido.append(HRFlowable(width="100%", thickness=1.5, color=_FACTURA_PRIMARY, spaceBefore=6, spaceAfter=6))
+
+    if es_autorizada:
+        contenido.append(Paragraph(
+            f"<b>N° Autorización:</b> {factura.numero_autorizacion}",
+            ParagraphStyle('FootAuth', parent=styles['Normal'], fontName='Helvetica-Bold',
+                           fontSize=9, textColor=_FACTURA_DARK),
+        ))
+        contenido.append(Paragraph(
+            "<b>CONSULTE:</b> https://cel.sri.gob.ec/",
+            styles['SmallFac'],
+        ))
+    else:
+        warning_style = ParagraphStyle(
+            'WarnFac', parent=styles['Normal'], fontName='Helvetica-Bold',
+            fontSize=12, textColor=_FACTURA_RED, alignment=TA_CENTER, spaceBefore=6, spaceAfter=6,
+        )
+        contenido.append(Paragraph("DOCUMENTO SIN AUTORIZACIÓN", warning_style))
+
+    doc.build(contenido)
+    return buffer.getvalue()
 
 
 async def get_current_user_optional(
@@ -314,21 +681,170 @@ async def listar_facturas(
 
 @router.get(
     "/{factura_id}/xml",
-    summary="Descargar XML firmado",
-    description="Devuelve el XML firmado de una factura como descarga (application/xml).",
+    summary="Descargar XML de la factura",
+    description=(
+        "Devuelve el XML autorizado (con número de autorización) si la factura "
+        "está autorizada; en caso contrario devuelve el XML firmado."
+    ),
 )
 async def descargar_xml(factura_id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(FacturaElectronica).where(FacturaElectronica.id == factura_id))
     factura = result.scalar_one_or_none()
     if not factura:
         raise HTTPException(status_code=404, detail="Factura electrónica no encontrada")
+
+    # Si está autorizada y tiene xml_respuesta_sri con contenido XML, servir ese
+    xml_contenido = factura.xml_firmado
+    if (
+        factura.estado_sri == "autorizado"
+        and factura.xml_respuesta_sri
+        and "<comprobante" in factura.xml_respuesta_sri
+    ):
+        xml_contenido = factura.xml_respuesta_sri
+
     return Response(
-        content=factura.xml_firmado,
+        content=xml_contenido,
         media_type="application/xml",
         headers={
             "Content-Disposition": f'attachment; filename="{factura.clave_acceso}.xml"'
         },
     )
+
+
+@router.get(
+    "/{factura_id}/pdf",
+    summary="Descargar PDF de la factura electrónica",
+    description=(
+        "Genera y devuelve un PDF con formato de factura electrónica SRI: "
+        "datos del emisor, cliente, detalle, IVA, total y número de autorización."
+    ),
+)
+async def descargar_pdf(factura_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(FacturaElectronica).where(FacturaElectronica.id == factura_id)
+    )
+    factura = result.scalar_one_or_none()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura electrónica no encontrada")
+
+    # Cargar cliente
+    cliente = None
+    if factura.cliente_id:
+        result = await db.execute(select(Cliente).where(Cliente.id == factura.cliente_id))
+        cliente = result.scalar_one_or_none()
+
+    # Cargar equipos de la orden (si existe)
+    equipos = []
+    if factura.orden_servicio_id:
+        result = await db.execute(
+            select(OrdenServicio)
+            .options(selectinload(OrdenServicio.equipos))
+            .where(OrdenServicio.id == factura.orden_servicio_id)
+        )
+        orden = result.scalar_one_or_none()
+        if orden and orden.equipos:
+            equipos = orden.equipos
+
+    pdf_bytes = _generar_pdf_factura(factura, cliente, equipos)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="{factura.clave_acceso}.pdf"'
+        },
+    )
+
+
+@router.post(
+    "/{factura_id}/consultar-autorizacion",
+    summary="Consultar estado de autorización ante el SRI",
+    description=(
+        "Consulta al SRI la autorización actual de la factura sin retransmitir. "
+        "Si el SRI responde AUTORIZADO, actualiza el estado y guarda el XML. "
+        "Requiere rol admin."
+    ),
+)
+async def consultar_estado_autorizacion(
+    factura_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[Usuario] = Depends(get_current_user_optional),
+):
+    if not _es_admin(current_user):
+        raise HTTPException(status_code=403, detail="Solo administradores pueden consultar autorización")
+
+    result = await db.execute(
+        select(FacturaElectronica).where(FacturaElectronica.id == factura_id)
+    )
+    factura = result.scalar_one_or_none()
+    if not factura:
+        raise HTTPException(status_code=404, detail="Factura electrónica no encontrada")
+
+    # Cargar ruta p12 desde configuración del sistema
+    result = await db.execute(select(ConfiguracionSistema))
+    cfg_rows = result.scalars().all()
+    cfg = {row.clave: row.valor for row in cfg_rows}
+    ruta_p12 = cfg.get("firma_p12_ruta") or FIRMA_P12_DEFAULT
+
+    try:
+        resultado = consultar_autorizacion(
+            clave_acceso=factura.clave_acceso,
+            ambiente=factura.ambiente,
+            ruta_p12=ruta_p12,
+        )
+    except ErrorTransmisionSRI as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"No se pudo consultar al SRI: {exc}",
+        ) from exc
+    except (RuntimeError, FileNotFoundError, ValueError) as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error interno al consultar autorización: {exc}",
+        )
+
+    estado = (resultado.get("estado") or "").upper()
+
+    if estado == "AUTORIZADO":
+        factura.estado_sri = "autorizado"
+        factura.numero_autorizacion = resultado.get("numero_autorizacion")
+        if resultado.get("xml_autorizado"):
+            factura.xml_respuesta_sri = resultado["xml_autorizado"]
+        if resultado.get("fecha_autorizacion"):
+            try:
+                factura.fecha_autorizacion = datetime.fromisoformat(
+                    resultado["fecha_autorizacion"].replace("Z", "+00:00")
+                )
+            except ValueError:
+                factura.fecha_autorizacion = None
+    elif estado == "EN PROCESO":
+        pass  # No cambiar nada, aún procesando
+    else:
+        # DEVUELTA / NO AUTORIZADO u otro estado
+        estado_sri_map = {
+            "DEVUELTA": "devuelta",
+            "NO AUTORIZADO": "no_autorizado",
+        }
+        factura.estado_sri = estado_sri_map.get(estado, "recibida")
+        errores = resultado.get("mensajes") or []
+        if errores:
+            factura.xml_respuesta_sri = _formatear_errores(errores)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al guardar el resultado de la consulta: {exc}",
+        )
+    await db.refresh(factura)
+
+    return {
+        "id": factura.id,
+        "estado_sri": factura.estado_sri,
+        "numero_autorizacion": factura.numero_autorizacion,
+        "fecha_autorizacion": factura.fecha_autorizacion,
+    }
 
 
 class TransmitirRequest(BaseModel):

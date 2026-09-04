@@ -471,3 +471,38 @@ psql -U skorggamor -d orpey_db
 - Regularizar SRI: IVA Abr/Jun/Jul 2026, clave portal, permiso de facturación (~3 meses vigencia).
 - (Opcional futuro) Endpoint "regenerar XML" para re-firmar comprobantes devueltos por estructura.
 - (Opcional futuro) Confirmar con el SRI el `codigoPorcentaje` vigente (13% vs 15%) antes de producción.
+
+## 2026-09-03 — Facturación completa operativa
+- Se implementó facturación electrónica de punta a punta (generar → transmitir → autorizar → descargar).
+- Backend: descarga XML autorizado, generación de PDF con reportlab (formato SRI), endpoint consultar-autorización.
+- Frontend: botones Descargar PDF/XML, Refrescar autorización, badges de estado (Facturas.jsx).
+- Primera factura REAL emitida a producción (ORP-0002 → 001-001-000000002, $30.00). SRI la recibió, autorización en proceso.
+- Monitor de autorización en background: `logs/monitor_autorizacion.py` (consulta cada 2 min).
+- Ver ESPEC-FACTURACION.md para el contrato de API implementado.
+
+---
+
+## 2026-09-03 — ⚡ Sistema de Autorización Eficiente (ANEXO)
+
+### Estado: Facturación de producción funcional end-to-end
+✅ **Primera factura real autorizable:** id=21 (ORP-0002, $30.00), clave válida, ambiente 2 (producción).
+⚠️ SRI la tiene "EN PROCESO" — el worker la monitorea en background hasta autorizar.
+
+### Mejoras de eficiencia implementadas (como sistemas certificados comerciales)
+1. **Retry agresivo síncrono** (`transmision_sri.py:transmitir_y_autorizar`):
+   - `modo_agresivo=True` con backoff variable (2s→10s), ~30s de retry.
+   - Captura la autorización típica sin bloquear la UI.
+2. **Worker de fondo persistente** (`worker_autorizacion.py` + systemd):
+   - Servicio `orpey-worker-autorizacion.service`, reinicia auto, sobrevive reboot.
+   - Escanea BD cada 45s por `firmado/recibida/en_proceso`, consulta SRI, actualiza estado.
+   - Garantiza que NINGUNA factura quede sin autorizar.
+
+### Verificación
+- Worker corre como servicio systemd (1 instancia, active running).
+- Pasada de prueba: consultó correctamente las 2 facturas pendientes (13 pruebas + 21 producción) contra sus respectivos ambientes.
+- Backend (`--reload`) ya tiene el nuevo retry agresivo.
+
+### Próximo
+- Cuando SRI autorice id=21 → confirmar estado "autorizado" + N° en UI/PDF/XML.
+- Luego deploy a VPS (pendiente green light de Daniel).
+- IVA Mayo 2026: reintentar tras aprobación (04-05/09/2026).
