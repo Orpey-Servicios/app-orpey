@@ -44,6 +44,7 @@ import {
   Eye,
   FilePlus,
   Stethoscope,
+  PieChart
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -56,6 +57,7 @@ import './BarraLateral.css';
  */
 const itemsMenu = [
   { ruta: '/',             nombre: 'Dashboard',       icono: LayoutDashboard },
+  { ruta: '/resumen',      nombre: 'Reportes',        icono: PieChart },
   {
     nombre: 'Ordenes',
     icono: ClipboardList,

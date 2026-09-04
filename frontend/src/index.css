@@ -102,6 +102,44 @@
 }
 
 /* ============================================================
+   TEMA OSCURO - Sobrescribe las variables base
+   ============================================================ */
+body.dark-theme {
+  /* Fondos generales oscuros y elegantes (inspirados en estilo glass/modern) */
+  --fondo-principal: #0f1115;          /* Fondo muy oscuro (Slate/Deep Blue) */
+  --fondo-tarjeta: #1a1d24;            /* Fondo de tarjetas ligeramente más claro */
+  --fondo-sidebar: #0a0c0f;            /* Sidebar más oscuro que el fondo principal */
+  --fondo-input: #232730;              /* Inputs aún más claros para contraste */
+  
+  /* Textos adaptados para fondos oscuros */
+  --texto-principal: #f8fafc;          /* Blanco casi puro para alta legibilidad */
+  --texto-secundario: #94a3b8;         /* Gris azulado claro */
+  --texto-terciario: #64748b;          /* Gris azulado medio */
+  
+  /* Bordes más sutiles para no distraer en modo oscuro */
+  --borde-color: #2e3646;              
+  --borde-color-hover: #475569;
+  
+  /* Escala de colores oscuros adaptada al modo oscuro (no invertida) */
+  --color-oscuro: #0a0c0f;             /* Muy oscuro para el sidebar y contrastes */
+  --color-oscuro-claro: #1a1d24;       
+  --color-gris-claro: #1e293b;         
+  --color-gris-medio: #475569;         
+  
+  /* Sombras más intensas y oscuras para generar profundidad (glow sutil) */
+  --sombra-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --sombra-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.4);
+  --sombra-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.6), 0 4px 6px -4px rgba(0, 0, 0, 0.5);
+  --sombra-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+
+  /* Variaciones de estados (más saturados pero con fondos translúcidos en lo posible) */
+  --color-exito-fondo: rgba(34, 197, 94, 0.15);
+  --color-advertencia-fondo: rgba(245, 158, 11, 0.15);
+  --color-error-fondo: rgba(239, 68, 68, 0.15);
+  --color-info-fondo: rgba(59, 130, 246, 0.15);
+}
+
+/* ============================================================
    RESET - Normalizar estilos del navegador
    Cada navegador tiene estilos por defecto diferentes.
    El reset asegura que todos se vean igual.

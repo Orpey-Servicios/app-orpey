@@ -47,6 +47,7 @@ import Login from './paginas/Login';
 import Usuarios from './paginas/Usuarios';
 import Diagnostico from './paginas/Diagnostico';
 import Configuracion from './paginas/Configuracion';
+import Resumen from './paginas/Resumen';
 
 /**
  * Layout principal: Sidebar fijo + Header + Contenido dinámico
@@ -145,6 +146,9 @@ export default function App() {
 
           {/* Rutas de Configuración */}
           <Route path="/configuracion" element={<Configuracion />} />
+
+          {/* Rutas de Resumen/Estadísticas */}
+          <Route path="/resumen" element={<Resumen />} />
         </Route>
       </Routes>
     </BrowserRouter>

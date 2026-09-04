@@ -51,7 +51,9 @@ export default function Dashboard() {
         obtenerOrdenes()
       ]);
       setStats(dashData);
-      setOrdenes(ordenesData.slice(0, 5)); // Solo las 5 más recientes
+      // Excluir órdenes canceladas del dashboard
+      const ordenesActivas = ordenesData.filter(o => o.estado !== 'cancelada');
+      setOrdenes(ordenesActivas.slice(0, 5)); // Solo las 5 más recientes
       try {
         const resumen = await obtenerResumenCaja();
         setResumenCaja(resumen || null);
@@ -238,9 +240,12 @@ export default function Dashboard() {
                     <td>{orden.equipos?.map(e => [e.marca, e.modelo].filter(Boolean).join(' ')).filter(Boolean).join(', ') || '—'}</td>
                     <td>
                       <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
-                        {orden.equipos?.length > 0 
-                          ? orden.equipos.map((e, idx) => <BadgeEstado key={idx} estado={e.estado} />)
-                          : <BadgeEstado estado={orden.estado} />
+                        {orden.estado === 'cancelada' 
+                          ? <BadgeEstado estado="cancelada" />
+                          : (orden.equipos?.length > 0 
+                              ? orden.equipos.map((e, idx) => <BadgeEstado key={idx} estado={e.estado} />)
+                              : <BadgeEstado estado={orden.estado} />
+                            )
                         }
                       </div>
                     </td>

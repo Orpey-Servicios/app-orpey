@@ -9,8 +9,16 @@ Endpoints disponibles:
 - GET /api/ordenes           → Listar todas las órdenes
 - GET /api/ordenes/{id}      → Ver una orden específica
 - PUT /api/ordenes/{id}      → Actualizar orden
-- DELETE /api/ordenes/{id}   → Eliminar orden
+- DELETE /api/ordenes/{id}   → Marcar orden como CANCELADA (soft delete)
+- POST /api/ordenes/{id}/cancelar → Cancelar orden (ver método recomendado)
 - GET /api/ordenes/dashboard → Estadísticas del dashboard
+
+NOTA SOBRE CANCELACIÓN (2026-09-02):
+Las órdenes NUNCA se borran físicamente. En su lugar se marcan como 'cancelada',
+lo que mantiene el correlativo de números (ORP-00XX) intacto y excluye la orden
+de los datos oficiales y del dashboard. Para cancelar usar preferentemente
+POST /api/ordenes/{id}/cancelar (con o sin trailing slash), evitando el DELETE
+que antiguamente causaba el error "Token no proporcionado" por el redirect 307.
 """
 
 from typing import List, Optional
@@ -413,7 +421,9 @@ async def actualizar_equipo(
 ):
     """Actualiza un equipo específico. Cierra la orden si todos están entregados."""
     result = await db.execute(
-        select(EquipoOrden).where(EquipoOrden.id == equipo_id, EquipoOrden.orden_id == orden_id)
+        select(EquipoOrden)
+        .options(selectinload(EquipoOrden.repuestos))
+        .where(EquipoOrden.id == equipo_id, EquipoOrden.orden_id == orden_id)
     )
     equipo = result.scalar_one_or_none()
 
@@ -499,20 +509,88 @@ async def actualizar_equipo(
     "/{orden_id}",
     status_code=204,
     summary="Eliminar una orden",
-    description="Elimina una orden del sistema. Solo permitido para administradores y asistentes.",
+    description="Marca una orden como CANCELADA (soft delete). No se borra de la BD para no romper el correlativo. Solo permitido para administradores y asistentes. El token debe ir en el header Authorization.",
     dependencies=[Depends(require_roles(["admin", "asistente"]))]
 )
 async def eliminar_orden(
     orden_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    """Elimina una orden. Se usa solo si fue creada por error."""
+    """Marca una orden como cancelada (soft delete). Mantiene el número en el correlativo."""
     result = await db.execute(select(OrdenServicio).where(OrdenServicio.id == orden_id))
     orden = result.scalar_one_or_none()
 
     if not orden:
         raise HTTPException(status_code=404, detail="Orden no encontrada")
 
-    await db.delete(orden)
+    # Soft delete: marcar como cancelada en vez de borrarla físicamente
+    orden.estado = EstadoOrden.cancelada
+    orden.fecha_cierre = datetime.now()
     await db.commit()
     return None
+
+
+# Los dos siguientes endpoints manejan la cancelación explícita.
+# Se definen con y sin trailing slash para evitar el redirect 307 de FastAPI
+# que puede perder el header Authorization (causa del error "Token no proporcionado").
+
+@router.post(
+    "/{orden_id}/cancelar/",
+    response_model=OrdenResponse,
+    summary="Cancelar una orden (soft delete)",
+    description="Marca una orden como CANCELADA manteniendo su número en el correlativo. No participa en datos oficiales ni en el dashboard.",
+)
+async def cancelar_orden(
+    orden_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Marca una orden como cancelada. Se mantiene en la BD (soft delete) para no romper el correlativo."""
+    result = await db.execute(
+        select(OrdenServicio)
+        .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
+        .where(OrdenServicio.id == orden_id)
+    )
+    orden = result.unique().scalar_one_or_none()
+
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    if orden.estado == EstadoOrden.cancelada:
+        raise HTTPException(status_code=400, detail="La orden ya está cancelada")
+
+    orden.estado = EstadoOrden.cancelada
+    orden.fecha_cierre = datetime.now()
+    await db.commit()
+    return orden
+
+
+@router.post(
+    "/{orden_id}/cancelar",
+    response_model=OrdenResponse,
+    summary="Cancelar una orden (soft delete, sin trailing slash)",
+    description="Marca una orden como CANCELADA manteniendo su número en el correlativo.",
+)
+async def cancelar_orden_sin_slash(
+    orden_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user)
+):
+    """Igual que cancelar_orden pero sin trailing slash (evita redirect 307)."""
+    result = await db.execute(
+        select(OrdenServicio)
+        .options(joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos))
+        .where(OrdenServicio.id == orden_id)
+    )
+    orden = result.unique().scalar_one_or_none()
+
+    if not orden:
+        raise HTTPException(status_code=404, detail="Orden no encontrada")
+
+    if orden.estado == EstadoOrden.cancelada:
+        raise HTTPException(status_code=400, detail="La orden ya está cancelada")
+
+    orden.estado = EstadoOrden.cancelada
+    orden.fecha_cierre = datetime.now()
+    await db.commit()
+    return orden

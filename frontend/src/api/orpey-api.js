@@ -231,13 +231,24 @@ export async function actualizarEquipo(ordenId, equipoId, datos) {
 }
 
 /**
- * Eliminar una orden de servicio.
+ * Eliminar/cancelar una orden de servicio.
+ * Soft delete: marca la orden como CANCELADA para no romper el correlativo.
+ * No participa en datos oficiales ni en el dashboard.
  * @param {number} id - ID de la orden
  */
 export async function eliminarOrden(id) {
-  return hacerPeticion(`/api/ordenes/${id}/`, {
-    method: 'DELETE',
+  return hacerPeticion(`/api/ordenes/${id}/cancelar`, {
+    method: 'POST',
   });
+}
+
+/**
+ * Cancelar una orden de servicio (soft delete).
+ * Equivalente a eliminarOrden pero con nombre explícito.
+ * @param {number} id - ID de la orden
+ */
+export async function cancelarOrden(id) {
+  return eliminarOrden(id);
 }
 
 /**
@@ -766,4 +777,51 @@ export async function anularFactura(facturaId, datos) {
     }
     throw err;
   }
+}
+
+/* ============================================================
+   CATÁLOGO DE SERVICIOS
+   ============================================================ */
+
+/**
+ * Obtener todos los servicios del catálogo.
+ * @returns {Promise<Array>} - Lista de servicios
+ */
+export async function obtenerServicios() {
+  return hacerPeticion('/api/servicios/');
+}
+
+/**
+ * Crear un nuevo servicio en el catálogo.
+ * @param {Object} datos - Datos del servicio (nombre, costo)
+ * @returns {Promise<Object>} - El servicio creado
+ */
+export async function crearServicio(datos) {
+  return hacerPeticion('/api/servicios/', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Actualizar un servicio en el catálogo.
+ * @param {number} id - ID del servicio
+ * @param {Object} datos - Datos a actualizar
+ * @returns {Promise<Object>} - El servicio actualizado
+ */
+export async function actualizarServicio(id, datos) {
+  return hacerPeticion(`/api/servicios/${id}`, {
+    method: 'PUT',
+    body: datos,
+  });
+}
+
+/**
+ * Eliminar (lógicamente) un servicio del catálogo.
+ * @param {number} id - ID del servicio
+ */
+export async function eliminarServicio(id) {
+  return hacerPeticion(`/api/servicios/${id}`, {
+    method: 'DELETE',
+  });
 }

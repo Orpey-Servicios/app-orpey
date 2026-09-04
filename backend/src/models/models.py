@@ -45,6 +45,7 @@ class EstadoOrden(str, enum.Enum):
     terminada = "terminada"
     entregada = "entregada"
     no_hubo_solucion = "no_hubo_solucion"
+    cancelada = "cancelada"
 
 
 class EstadoCotizacion(str, enum.Enum):
@@ -140,6 +141,7 @@ class EquipoOrden(Base):
     repuesto_a_instalar = Column(Text)
     costo = Column(Numeric(10, 2), default=0.00)
     estado = Column(Enum(EstadoOrden, name="estado_orden"), default=EstadoOrden.revision, nullable=False)
+    servicio_id = Column(Integer, ForeignKey("catalogo_servicios.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -193,6 +195,22 @@ class EquipoOrden(Base):
         cascade="all, delete-orphan",
         order_by="DiagnosticoRepuesto.id"
     )
+    servicio = relationship("CatalogoServicio")
+
+
+class CatalogoServicio(Base):
+    """
+    Tabla: catalogo_servicios
+    Catálogo de servicios predefinidos con costos estandarizados.
+    """
+    __tablename__ = "catalogo_servicios"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    nombre = Column(String(200), unique=True, nullable=False)
+    costo = Column(Numeric(10, 2), default=0.00, nullable=False)
+    activo = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
 
 class OrdenServicio(Base):
