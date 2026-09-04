@@ -11,6 +11,8 @@ Flujo:
 4. El frontend guarda el token y lo envía en cada request
 """
 
+import os
+
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -27,9 +29,11 @@ from src.models.models import Usuario, RolUsuario
 # CONFIGURACIÓN
 # =====================================================
 
-# Clave secreta para firmar los tokens
-# En producción, usar una variable de entorno
-SECRET_KEY = "orpey-servicios-secret-key-2025-cambiar-en-produccion"
+# Clave secreta para firmar los tokens.
+# PRIMERO lee de la variable de entorno JWT_SECRET_KEY (producción / deploy).
+# Si no está definida, usa un fallback local para desarrollo.
+# NUNCA commitear el valor de producción.
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "orpey-servicios-dev-secret-key-cambiar")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 horas
 

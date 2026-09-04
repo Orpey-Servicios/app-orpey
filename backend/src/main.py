@@ -95,9 +95,19 @@ app = FastAPI(
 )
 
 # Configurar CORS (permite que el frontend se comunique con el backend)
+# En producción se sirve el frontend desde el mismo origen (nginx reverse proxy),
+# por lo que CORS puede restringirse. Se configura via ALLOWED_ORIGINS (coma-separado).
+# Default: localhost de desarrollo (no usar "*" en producción).
+import os as _os
+_allowed_origins_env = _os.environ.get("ALLOWED_ORIGINS", "")
+all_allowed_origins = (
+    [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
+    if _allowed_origins_env
+    else ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000", "http://127.0.0.1:8000"]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # En producción, cambiar por el dominio del frontend
+    allow_origins=all_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -652,6 +652,16 @@ def obtener_password_firma() -> Optional[str]:
                 return valor
         except OSError:
             return None
+    # Fallback: archivo dentro del container (/app/firma/.firma_p12.pass)
+    ruta_container = "/app/firma/.firma_p12.pass"
+    if os.path.exists(ruta_container):
+        try:
+            with open(ruta_container, "r", encoding="utf-8") as f:
+                valor = f.read().strip()
+            if valor:
+                return valor
+        except OSError:
+            return None
     return None
 
 

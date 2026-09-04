@@ -70,8 +70,12 @@ router = APIRouter(
     tags=["Facturación Electrónica SRI"],
 )
 
-# Ruta por defecto de la firma digital (configurable en configuracion_sistema)
-FIRMA_P12_DEFAULT = "/home/skorggamor/agente-contador/firmadigital.p12"
+# Ruta por defecto de la firma digital (configurable en configuracion_sistema).
+# En el container de producción se monta en /app/firma/firmadigital.p12 (read-only);
+# en desarrollo local se usa la ruta de Daniel. Se puede overridear con FIRMA_P12_RUTA.
+FIRMA_P12_DEFAULT = os.environ.get(
+    "FIRMA_P12_RUTA", "/home/skorggamor/agente-contador/firmadigital.p12"
+)
 
 # Colores para el PDF de factura
 _FACTURA_PRIMARY = HexColor("#FBC305")

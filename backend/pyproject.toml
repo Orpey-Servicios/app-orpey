@@ -17,6 +17,10 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",  # JWT para autenticación
     "passlib[bcrypt]>=1.7.4",    # Hashing de contraseñas
     "python-multipart>=0.0.6",   # Soporte para formularios
+    "lxml>=5.0.0",               # Parsing/construcción de XML (firma SRI)
+    "signxml>=3.2.0",            # Firma digital XML XAdES (facturación SRI)
+    "cryptography>=42.0.0",      # Cifrado/PKCS#12 (firma digital)
+    "httpx>=0.27.0",             # Cliente HTTP (consulta/transmisión SRI)
 ]
 
 [project.optional-dependencies]

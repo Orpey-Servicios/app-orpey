@@ -58,3 +58,4 @@ ORDENES_CONSOLIDADAS_FINAL.xlsx
 .mypy_cache/
 # Logs runtime (no versionar)
 logs/
+backup_config

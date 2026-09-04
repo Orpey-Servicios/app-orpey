@@ -506,3 +506,44 @@ psql -U skorggamor -d orpey_db
 - Cuando SRI autorice id=21 → confirmar estado "autorizado" + N° en UI/PDF/XML.
 - Luego deploy a VPS (pendiente green light de Daniel).
 - IVA Mayo 2026: reintentar tras aprobación (04-05/09/2026).
+
+---
+
+## 2026-09-03 → 09-04 — 🚀 DESPLIEGUE A PRODUCCIÓN EN VPS CONTABO (COMPLETADO)
+
+### Estado: ✅ app-orpey EN PRODUCCIÓN (VPS 5.189.165.55, puerto 8001)
+
+**Sistema de facturación SRI funcionando end-to-end + deploy en servidor.**
+
+### Deploy completado
+- **3 containers** en red `orpey_net` (aislada de `abasto_net`):
+  - `orpey-db-1` (Postgres 16, 5432 interno solo)
+  - `orpey-backend-1` (FastAPI, 8000 interno)
+  - `orpey-nginx-1` (frontend + proxy, **puerto 8001 expuesto**)
+- **Datos reales migrados:** 41 clientes, 21 órdenes, 4 usuarios, facturas electrónicas.
+  - Usado el DUMP FRESCO con `--no-owner` (evita error de rol `skorggamor` en container).
+  - Corregida la ruta del `.p12` en el dump → `/app/firma/firmadigital.p12`.
+- **Firma digital montada:** `/app/firma/firmadigital.p12` (read-only), verificada OK: el backend la carga (cert RUC GUAYAQUIL).
+- **Firewall:** puerto 8001 abierto (UFW allow, aditivo — Abasto 8000 intacto).
+- **Acceso externo:** `http://5.189.165.55:8001` responde 200.
+- **Backup automático:** cron 3am → `/opt/backups/orpey_YYYYMMDD.sql.gz` (rotación 7 días).
+- **AbastoAPP NO afectado** — ambos containers siguen corriendo.
+
+### Fixes de seguridad aplicados (pre-deploy)
+- JWT secret desde env var (`JWT_SECRET_KEY`).
+- CORS configurable (`ALLOWED_ORIGINS`, ya no `*`).
+- Ruta `.p12` configurable (`FIRMA_P12_RUTA` → `/app/firma/`).
+- Password firma: env var + fallback `/app/firma/.firma_p12.pass`.
+- deps XML (lxml, signxml, cryptography, httpx) agregadas a pyproject.
+
+### Comandos útiles en VPS
+```bash
+docker compose -f /opt/app-orpey/docker-compose.yml ps        # estado
+docker logs orpey-backend-1 --tail=50                          # logs
+/opt/backups/backup_orpey.sh                                   # backup manual
+```
+
+### Pendiente
+- Emitir una factura real desde la interfaz en producción (verificar flujo completo desde el container).
+- Confirmar autorización de factura 21 (worker local la monitorea) y que la factura en el VPS refleje autorización.
+- IVA Mayo 2026 (reintentar tras aprobación).
