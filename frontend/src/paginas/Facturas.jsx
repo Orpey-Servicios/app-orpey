@@ -6,7 +6,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FileText, FileDown, Plus, X, FileCheck2, Send, AlertTriangle,
-  UploadCloud, Ban, Info, FileX2, RefreshCw, FileBadge
+  UploadCloud, Ban, Info, FileX2, RefreshCw, FileBadge, Copy, Check
 } from 'lucide-react';
 import {
   obtenerFacturas, obtenerOrdenes, obtenerClientes,
@@ -96,6 +96,15 @@ export default function Facturas() {
   const [facturaDetalle, setFacturaDetalle] = useState(null);
   const [facturaAnular, setFacturaAnular] = useState(null);
   const [refrescando, setRefrescando] = useState(new Set());
+  const [copiadoId, setCopiadoId] = useState(null);
+
+  const copiarClave = (e, clave, id) => {
+    e.stopPropagation();
+    if (!clave) return;
+    navigator.clipboard.writeText(clave);
+    setCopiadoId(id);
+    setTimeout(() => setCopiadoId(null), 1800);
+  };
 
   const idsOrdenesFacturadas = useMemo(
     () => new Set(facturas.map(f => f.orden_servicio_id).filter(Boolean)),
@@ -306,20 +315,16 @@ export default function Facturas() {
             <p>No hay comprobantes con el estado seleccionado</p>
           </div>
         ) : (
-          <table className="tabla">
+          <table className="tabla facturas__tabla">
             <thead>
               <tr>
-                <th>N° Documento</th>
-                <th>Clave de Acceso</th>
-                <th>Cliente</th>
-                <th>Origen</th>
-                <th>Factura Anulada</th>
-                <th>Estado</th>
-                <th>Autorización</th>
-                <th>Ambiente</th>
-                <th>Total</th>
+                <th>Comprobante</th>
+                <th>Cliente / Origen</th>
+                <th>Clave de Acceso SRI</th>
                 <th>Fecha</th>
-                <th>Acciones</th>
+                <th>Total</th>
+                <th>Estado SRI</th>
+                <th className="texto-derecha">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -331,131 +336,157 @@ export default function Facturas() {
                 const facturaOriginal = !esNC ? null : facturasPorId.get(Number(f.factura_referenciada_id));
                 const ncAnuladora = esNC ? null : ncPorFacturaAnulada.get(Number(f.id));
                 const anulable = !esNC && ESTADOS_ANULABLES.includes(f.estado_sri);
+                const esError = f.estado_sri === 'devuelta' || f.estado_sri === 'no_autorizado';
+                const infoEstado = ESTADOS_SRI[f.estado_sri] || { clase: 'badge--gris', label: f.estado_sri || 'Generado' };
+                const claseEstado = esError ? `${infoEstado.clase} facturas__badge--error` : infoEstado.clase;
+
                 return (
                   <tr key={f.id}>
+                    {/* 1. COMPROBANTE: N° Documento + Tipo + Ambiente + Referencias NC */}
                     <td>
                       <div className="facturas__doc">
-                        <strong>{f.numero_documento}</strong>
-                        <span className={`facturas__tipo ${esNC ? 'facturas__tipo--nc' : 'facturas__tipo--fac'}`}>
-                          {esNC ? <FileX2 size={10} /> : <FileText size={10} />}
-                          {esNC ? 'Nota Crédito' : 'Factura'}
-                        </span>
+                        <div className="facturas__doc-top">
+                          <strong className="facturas__doc-num">{f.numero_documento}</strong>
+                          <span className={`facturas__tipo ${esNC ? 'facturas__tipo--nc' : 'facturas__tipo--fac'}`}>
+                            {esNC ? <FileX2 size={10} /> : <FileText size={10} />}
+                            {esNC ? 'NC' : 'Factura'}
+                          </span>
+                          <span className={`facturas__ambiente ${f.ambiente === '2' ? 'facturas__ambiente--prod' : ''}`}>
+                            {f.ambiente === '2' ? 'Prod' : 'Pruebas'}
+                          </span>
+                        </div>
+                        {esNC && (
+                          <span
+                            className="facturas__nc-ref"
+                            title={facturaOriginal ? `Anula la factura ${facturaOriginal.numero_documento}` : 'Factura original'}
+                          >
+                            ↳ Anula: {facturaOriginal?.numero_documento || `#${f.factura_referenciada_id}`}
+                          </span>
+                        )}
+                        {!esNC && ncAnuladora && (
+                          <span className="facturas__nc-ref" title={`Anulada por ${ncAnuladora.numero_documento}`}>
+                            ↳ Anulada por: {ncAnuladora.numero_documento}
+                          </span>
+                        )}
                       </div>
                     </td>
+
+                    {/* 2. CLIENTE / ORIGEN: Nombre + link a Orden / Nota de venta */}
                     <td>
-                      <span className="facturas__clave" title={f.clave_acceso}>{f.clave_acceso}</span>
-                    </td>
-                    <td>{cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${f.cliente_id}`}</td>
-                    <td>
-                      {esNC ? (
-                        <span className="facturas__origen-nc">Nota de crédito</span>
-                      ) : f.orden_servicio_id ? (
-                        <Link to={`/ordenes/${f.orden_servicio_id}`} className="facturas__link">
-                          {origenOrden?.numero_orden || `Orden #${f.orden_servicio_id}`}
-                        </Link>
-                      ) : 'Nota de venta'}
-                    </td>
-                    <td>
-                      {esNC ? (
-                        <span
-                          className="facturas__nc-ref"
-                          title={facturaOriginal ? `Anula la factura ${facturaOriginal.numero_documento}` : 'Factura original'}
-                        >
-                          {facturaOriginal?.numero_documento || `#${f.factura_referenciada_id}`}
+                      <div className="facturas__cliente-info">
+                        <span className="facturas__cliente-nombre" title={cliente ? `${cliente.nombre} ${cliente.apellido}` : ''}>
+                          {cliente ? `${cliente.nombre} ${cliente.apellido}` : `Cliente #${f.cliente_id}`}
                         </span>
-                      ) : ncAnuladora ? (
-                        <span className="facturas__nc-ref" title={`Anulada por ${ncAnuladora.numero_documento}`}>
-                          {ncAnuladora.numero_documento}
-                        </span>
-                      ) : (
-                        <span className="facturas__aut--vacio">—</span>
-                      )}
-                    </td>
-                    <td>
-                      {(() => {
-                        const info = ESTADOS_SRI[f.estado_sri];
-                        if (!info) {
-                          return (
-                            <span className="badge-estado badge--gris">
-                              <span className="badge-estado__punto" />{f.estado_sri || 'Generado'}
-                            </span>
-                          );
-                        }
-                        const esError = f.estado_sri === 'devuelta' || f.estado_sri === 'no_autorizado';
-                        const clase = esError
-                          ? `${info.clase} facturas__badge--error`
-                          : info.clase;
-                        return (
-                          <span
-                            className={`badge-estado ${clase}${esError ? ' facturas__badge--clickable' : ''}`}
-                            onClick={esError ? () => setFacturaDetalle(f) : undefined}
-                            title={esError ? 'Clic para ver los errores del SRI' : info.label}
-                          >
-                            <span className="badge-estado__punto" />{info.label}
-                            {esError && <AlertTriangle size={13} className="facturas__badge-icono" />}
-                          </span>
-                        );
-                      })()}
-                    </td>
-                    <td>
-                      {f.numero_autorizacion ? (
-                        <div className="facturas__aut">
-                          <span className="facturas__aut-num" title={f.numero_autorizacion}>{f.numero_autorizacion}</span>
-                          {f.fecha_autorizacion && (
-                            <span className="facturas__aut-fecha">{formatearFechaHora(f.fecha_autorizacion)}</span>
+                        <div className="facturas__origen-sub">
+                          {esNC ? (
+                            <span className="facturas__origen-nc">Nota de crédito</span>
+                          ) : f.orden_servicio_id ? (
+                            <Link to={`/ordenes/${f.orden_servicio_id}`} className="facturas__link">
+                              {origenOrden?.numero_orden || `Orden #${f.orden_servicio_id}`}
+                            </Link>
+                          ) : (
+                            <span className="facturas__origen-nv">Nota de venta</span>
                           )}
                         </div>
-                      ) : (
-                        <span className="facturas__aut--vacio">—</span>
-                      )}
+                      </div>
                     </td>
+
+                    {/* 3. CLAVE DE ACCESO: Truncada con botón copiar 1-clic */}
                     <td>
-                      <span className={`facturas__ambiente ${f.ambiente === '2' ? 'facturas__ambiente--prod' : ''}`}>
-                        {f.ambiente === '2' ? 'Producción' : 'Pruebas'}
-                      </span>
+                      <div className="facturas__clave-wrapper" title={`Clave de acceso: ${f.clave_acceso}`}>
+                        <span className="facturas__clave">
+                          {f.clave_acceso ? `${f.clave_acceso.slice(0, 8)}...${f.clave_acceso.slice(-6)}` : '—'}
+                        </span>
+                        {f.clave_acceso && (
+                          <button
+                            type="button"
+                            className="facturas__btn-copiar"
+                            onClick={(e) => copiarClave(e, f.clave_acceso, f.id)}
+                            title={copiadoId === f.id ? "¡Copiada al portapapeles!" : "Copiar clave de acceso (49 dígitos)"}
+                          >
+                            {copiadoId === f.id ? <Check size={12} style={{ color: 'var(--color-exito)' }} /> : <Copy size={12} />}
+                          </button>
+                        )}
+                      </div>
                     </td>
-                    <td><strong>${Number(f.total ?? 0).toFixed(2)}</strong></td>
-                    <td>{formatearFecha(f.fecha_emision)}</td>
+
+                    {/* 4. FECHA */}
+                    <td className="facturas__celda-fecha">
+                      {formatearFecha(f.fecha_emision)}
+                    </td>
+
+                    {/* 5. TOTAL */}
+                    <td className="facturas__celda-total">
+                      <strong>${Number(f.total ?? 0).toFixed(2)}</strong>
+                    </td>
+
+                    {/* 6. ESTADO SRI: Badge + Fecha de autorización debajo */}
                     <td>
-                      <div className="tabla__acciones">
+                      <div className="facturas__estado-wrapper">
+                        <span
+                          className={`badge-estado ${claseEstado}${esError ? ' facturas__badge--clickable' : ''}`}
+                          onClick={esError ? () => setFacturaDetalle(f) : undefined}
+                          title={esError ? 'Clic para ver los errores del SRI' : infoEstado.label}
+                        >
+                          <span className="badge-estado__punto" />{infoEstado.label}
+                          {esError && <AlertTriangle size={12} className="facturas__badge-icono" />}
+                        </span>
+                        {f.estado_sri === 'autorizado' && f.fecha_autorizacion && (
+                          <span className="facturas__aut-fecha" title={`Autorizada: ${formatearFechaHora(f.fecha_autorizacion)}`}>
+                            {formatearFechaHora(f.fecha_autorizacion)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* 7. ACCIONES: Transmitir, Refrescar, Anular, PDF, XML */}
+                    <td>
+                      <div className="tabla__acciones facturas__acciones">
                         {(f.estado_sri === 'firmado' || f.estado_sri === 'recibida') && (
                           <button
-                            className="boton-secundario facturas__btn-transmitir"
+                            className="boton-secundario facturas__btn-accion facturas__btn-transmitir"
                             onClick={() => transmitir(f)}
                             disabled={transmitiendo.has(f.id)}
                             title="Transmitir y autorizar al SRI"
                           >
-                            <UploadCloud size={16} />
-                            {transmitiendo.has(f.id) ? 'Transmitiendo...' : 'Transmitir'}
+                            <UploadCloud size={14} />
+                            <span>{transmitiendo.has(f.id) ? '...' : 'Enviar'}</span>
+                          </button>
+                        )}
+                        {(f.estado_sri === 'recibida' || f.estado_sri === 'en_proceso' || f.estado_sri === 'firmado') && (
+                          <button
+                            className="boton-icono facturas__btn-icono"
+                            onClick={() => refrescarAutorizacion(f)}
+                            disabled={refrescando.has(f.id)}
+                            title={refrescando.has(f.id) ? 'Consultando autorización...' : 'Refrescar autorización SRI'}
+                          >
+                            <RefreshCw size={15} className={refrescando.has(f.id) ? 'facturas__refrescar--girando' : ''} />
                           </button>
                         )}
                         {anulable && (
                           <button
-                            className="boton-secundario facturas__btn-anular"
+                            className="boton-secundario facturas__btn-accion facturas__btn-anular"
                             onClick={() => setFacturaAnular(f)}
                             title="Emitir una nota de crédito para anular esta factura"
                           >
-                            <Ban size={16} /> Anular
+                            <Ban size={14} />
+                            <span>Anular</span>
                           </button>
                         )}
                         <button
-                          className={`boton-icono ${f.estado_sri === 'autorizado' ? 'facturas__btn-descargar--destacado' : ''}`}
+                          className={`boton-icono facturas__btn-icono ${f.estado_sri === 'autorizado' ? 'facturas__btn-descargar--destacado' : ''}`}
                           onClick={() => descargarPdfFactura(f.id)}
-                          title="Descargar PDF"
+                          title="Descargar PDF (RIDE)"
                         >
-                          <FileBadge size={18} />
+                          <FileBadge size={16} />
                         </button>
-                        <button className="boton-icono" onClick={() => descargarXmlFactura(f.id)} title="Descargar XML"><FileDown size={18} /></button>
-                        {(f.estado_sri === 'recibida' || f.estado_sri === 'en_proceso' || f.estado_sri === 'firmado') && (
-                          <button
-                            className="boton-icono"
-                            onClick={() => refrescarAutorizacion(f)}
-                            disabled={refrescando.has(f.id)}
-                            title={refrescando.has(f.id) ? 'Consultando autorización...' : 'Refrescar autorización'}
-                          >
-                            <RefreshCw size={18} className={refrescando.has(f.id) ? 'facturas__refrescar--girando' : ''} />
-                          </button>
-                        )}
+                        <button
+                          className="boton-icono facturas__btn-icono"
+                          onClick={() => descargarXmlFactura(f.id)}
+                          title="Descargar XML firmado"
+                        >
+                          <FileDown size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>

@@ -1,5 +1,15 @@
 /* Estilos Facturación Electrónica SRI */
-.facturas-pagina { padding: 0 32px 32px; }
+.facturas-pagina {
+  padding: 0 24px 24px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 1024px) {
+  .facturas-pagina {
+    padding: 0 16px 16px;
+  }
+}
 
 /* Header de la página */
 .facturas__header {
@@ -16,24 +26,200 @@
   font-size: var(--fuente-tamano-sm);
 }
 
-/* Clave de acceso: tipografía mono, truncada con title completo al hover */
-.facturas__clave {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--fuente-tamano-xs);
-  max-width: 220px; display: inline-block;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  vertical-align: bottom; cursor: help;
+/* Contenedor responsivo de la tabla */
+.facturas__tabla-contenedor {
+  background: var(--fondo-tarjeta);
+  border: 1px solid var(--borde-color);
+  border-radius: var(--borde-radio);
+  overflow-x: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  width: 100%;
 }
 
-/* Link del origen (órdenes) */
-.facturas__link { color: var(--color-info); text-decoration: none; font-weight: 600; }
-.facturas__link:hover { text-decoration: underline; }
+.facturas__tabla {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 820px;
+}
 
-/* Select del modal de generación */
-.facturas__select-ordenes { width: 100%; }
-.facturas__hint {
-  margin-top: 6px; font-size: var(--fuente-tamano-xs);
-  color: var(--texto-terciario); line-height: 1.4;
+.facturas__tabla th {
+  padding: 12px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  background: var(--fondo-principal);
+  border-bottom: 1px solid var(--borde-color);
+  white-space: nowrap;
+}
+
+.facturas__tabla td {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--borde-color);
+  vertical-align: middle;
+}
+
+.facturas__tabla tbody tr {
+  transition: background var(--transicion-rapida);
+}
+.facturas__tabla tbody tr:hover {
+  background: rgba(251, 195, 5, 0.04);
+}
+.facturas__tabla tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Comprobante: N° doc + tags */
+.facturas__doc {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 150px;
+}
+.facturas__doc-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.facturas__doc-num {
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--texto-principal);
+}
+.facturas__tipo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.facturas__tipo--fac {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+.facturas__tipo--nc {
+  background: #F5F3FF;
+  color: #7C3AED;
+}
+.facturas__ambiente {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  background: var(--fondo-principal);
+  color: var(--texto-terciario);
+  border: 1px solid var(--borde-color);
+  text-transform: uppercase;
+}
+.facturas__ambiente--prod {
+  background: #FEF3C7;
+  color: #B45309;
+  border-color: rgba(180, 83, 9, 0.2);
+}
+
+/* Cliente y Origen */
+.facturas__cliente-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  max-width: 200px;
+}
+.facturas__cliente-nombre {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--texto-principal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.facturas__origen-sub {
+  font-size: 12px;
+}
+.facturas__origen-nc, .facturas__origen-nv {
+  color: var(--texto-terciario);
+  font-size: 11px;
+}
+.facturas__link {
+  color: var(--color-info);
+  text-decoration: none;
+  font-weight: 600;
+}
+.facturas__link:hover {
+  text-decoration: underline;
+}
+
+/* Clave de acceso con botón copiar */
+.facturas__clave-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--fondo-principal);
+  padding: 3px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--borde-color);
+  white-space: nowrap;
+}
+.facturas__clave {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--texto-secundario);
+  cursor: help;
+}
+.facturas__btn-copiar {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--texto-terciario);
+  border-radius: 3px;
+  transition: all 0.15s ease;
+}
+.facturas__btn-copiar:hover {
+  background: var(--borde-color);
+  color: var(--texto-principal);
+}
+
+/* Celdas de Fecha y Total */
+.facturas__celda-fecha {
+  white-space: nowrap;
+  color: var(--texto-secundario);
+  font-size: 12px;
+}
+.facturas__celda-total {
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--texto-principal);
+}
+
+/* Estado SRI */
+.facturas__estado-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+  min-width: 110px;
+}
+.facturas__aut-fecha {
+  font-size: 10px;
+  color: var(--texto-terciario);
+  white-space: nowrap;
 }
 
 /* Badge de estado de error (devuelta / no autorizada) */
@@ -47,39 +233,9 @@
   margin-left: 6px; vertical-align: middle;
 }
 
-/* Columna de autorización SRI */
-.facturas__aut {
-  display: flex; flex-direction: column; gap: 2px;
-}
-
-/* N° documento + tipo de comprobante (Factura / Nota Crédito) */
-.facturas__doc {
-  display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
-}
-.facturas__doc strong { white-space: nowrap; }
-.facturas__tipo {
-  display: inline-flex; align-items: center; gap: 4px;
-  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
-  padding: 1px 7px; border-radius: 999px; white-space: nowrap;
-  text-transform: uppercase;
-}
-.facturas__tipo--fac {
-  background: #EFF6FF; color: #2563EB;
-}
-.facturas__tipo--nc {
-  background: #F5F3FF; color: #7C3AED;
-}
-
-/* Origen cuando la fila es una nota de crédito */
-.facturas__origen-nc {
-  font-size: var(--fuente-tamano-xs); color: var(--texto-terciario);
-  font-weight: 600;
-}
-
 /* Referencia bidireccional: NC → factura original / factura anulada → NC */
 .facturas__nc-ref {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: var(--fuente-tamano-xs); color: #7C3AED; font-weight: 600;
+  font-size: 11px; color: #7C3AED; font-weight: 600;
   white-space: nowrap; cursor: help;
 }
 
@@ -93,15 +249,47 @@
 }
 .badge--anulada-parcial .badge-estado__punto { background: #A78BFA; }
 
-/* Botón Anular (emite nota de crédito) */
-.facturas__btn-anular {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 6px 12px; font-size: var(--fuente-tamano-xs);
+/* Acciones */
+.facturas__acciones {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
   white-space: nowrap;
+}
+.facturas__btn-accion {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  height: 28px;
+  white-space: nowrap;
+}
+.facturas__btn-icono {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+/* Botón Anular */
+.facturas__btn-anular {
   color: #B45309; border-color: rgba(180, 83, 9, 0.4);
 }
 .facturas__btn-anular:hover {
   background: #FFFBEB; border-color: #B45309; color: #92400E;
+}
+
+/* Botón Transmitir */
+.facturas__btn-transmitir {
+  color: var(--color-primario-hover, #B45309);
 }
 
 /* Modal de anulación */
