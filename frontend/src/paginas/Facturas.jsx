@@ -6,12 +6,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import {
   FileText, FileDown, Plus, X, FileCheck2, Send, AlertTriangle,
-  UploadCloud, Ban, Info, FileX2, RefreshCw, FileBadge, Copy, Check
+  UploadCloud, Ban, Info, FileX2, RefreshCw, FileBadge, Copy, Check, Mail
 } from 'lucide-react';
 import {
   obtenerFacturas, obtenerOrdenes, obtenerClientes,
   generarFactura, descargarXmlFactura, descargarPdfFactura,
-  consultarAutorizacion, transmitirFactura, anularFactura
+  consultarAutorizacion, transmitirFactura, anularFactura, enviarFacturaEmail
 } from '../api/orpey-api';
 import './Facturas.css';
 
@@ -97,6 +97,10 @@ export default function Facturas() {
   const [facturaAnular, setFacturaAnular] = useState(null);
   const [refrescando, setRefrescando] = useState(new Set());
   const [copiadoId, setCopiadoId] = useState(null);
+  const [facturaEmail, setFacturaEmail] = useState(null);
+  const [emailDestino, setEmailDestino] = useState('');
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
+  const [mensajeEmail, setMensajeEmail] = useState(null);
 
   const copiarClave = (e, clave, id) => {
     e.stopPropagation();
@@ -274,6 +278,29 @@ export default function Facturas() {
 
   const clientesPorId = new Map(clientes.map(c => [c.id, c]));
   const ordenesPorId = new Map(ordenes.map(o => [o.id, o]));
+
+  const abrirModalEmail = (f) => {
+    setFacturaEmail(f);
+    const cli = clientesPorId.get(f.cliente_id);
+    setEmailDestino(cli?.email || '');
+    setMensajeEmail(null);
+  };
+
+  const handleEnviarEmail = async (e) => {
+    e.preventDefault();
+    if (!facturaEmail || !emailDestino.trim()) return;
+    setEnviandoEmail(true);
+    setMensajeEmail(null);
+    try {
+      const res = await enviarFacturaEmail(facturaEmail.id, { destinatario: emailDestino.trim() });
+      setMensajeEmail({ tipo: 'exito', texto: res?.mensaje || 'Comprobante enviado exitosamente por correo.' });
+      setFacturas(prev => prev.map(item => item.id === facturaEmail.id ? { ...item, email_enviado: true, fecha_envio_email: new Date().toISOString() } : item));
+    } catch (err) {
+      setMensajeEmail({ tipo: 'error', texto: err?.message || 'Error al enviar el comprobante por correo.' });
+    } finally {
+      setEnviandoEmail(false);
+    }
+  };
 
   return (
     <div className="facturas-pagina">
@@ -487,6 +514,13 @@ export default function Facturas() {
                         >
                           <FileDown size={16} />
                         </button>
+                        <button
+                          className={`boton-icono facturas__btn-icono ${f.email_enviado ? 'facturas__btn-email--enviado' : ''}`}
+                          onClick={() => abrirModalEmail(f)}
+                          title={f.email_enviado ? 'Comprobante enviado por correo (Clic para reenviar)' : 'Enviar comprobante por correo al cliente'}
+                        >
+                          <Mail size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -522,6 +556,19 @@ export default function Facturas() {
           })() : ''}
           onCerrar={() => setFacturaAnular(null)}
           onAnulada={onAnulada}
+        />
+      )}
+
+      {facturaEmail && (
+        <ModalEnviarEmail
+          factura={facturaEmail}
+          cliente={clientesPorId.get(facturaEmail.cliente_id)}
+          emailDestino={emailDestino}
+          setEmailDestino={setEmailDestino}
+          enviando={enviandoEmail}
+          mensaje={mensajeEmail}
+          onEnviar={handleEnviarEmail}
+          onCerrar={() => setFacturaEmail(null)}
         />
       )}
     </div>
@@ -771,6 +818,108 @@ function ModalFacturacion({ ordenes, clientes, onCerrar, onGenerada }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MODAL PARA ENVIAR COMPROBANTE ELECTRÓNICO POR CORREO (PDF RIDE + XML)
+ */
+function ModalEnviarEmail({ factura, cliente, emailDestino, setEmailDestino, enviando, mensaje, onEnviar, onCerrar }) {
+  const tipoDesc = factura.tipo_comprobante === '01' ? 'Factura Electrónica' : 'Nota de Crédito';
+  const nombreCliente = cliente ? `${cliente.nombre} ${cliente.apellido}`.trim() : 'Consumidor Final';
+
+  return (
+    <div className="modal-overlay" onClick={onCerrar}>
+      <div className="modal modal--mediano" onClick={(e) => e.stopPropagation()}>
+        <div className="modal__header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Mail size={22} className="modal__icono-titulo" />
+            <div>
+              <h2 className="modal__titulo">Enviar {tipoDesc} por Correo</h2>
+              <span className="facturas__subtitulo-modal">Comprobante N° {factura.numero_documento}</span>
+            </div>
+          </div>
+          <button className="modal__cerrar" onClick={onCerrar} aria-label="Cerrar"><X size={20} /></button>
+        </div>
+
+        <form onSubmit={onEnviar} className="modal__contenido">
+          {/* Resumen del comprobante */}
+          <div style={{
+            background: 'var(--fondo-principal)',
+            padding: '14px 16px',
+            borderRadius: '8px',
+            border: '1px solid var(--borde-color)',
+            marginBottom: '16px',
+            fontSize: '13px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ color: 'var(--texto-secundario)' }}>Cliente:</span>
+              <strong>{nombreCliente}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ color: 'var(--texto-secundario)' }}>Total:</span>
+              <strong>${Number(factura.total || 0).toFixed(2)}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--texto-secundario)' }}>Estado de envío:</span>
+              <span>
+                {factura.email_enviado ? (
+                  <span style={{ color: '#10B981', fontWeight: '600' }}>✓ Enviado previamente</span>
+                ) : (
+                  <span style={{ color: 'var(--texto-secundario)' }}>Pendiente de envío</span>
+                )}
+              </span>
+            </div>
+          </div>
+
+          {mensaje && (
+            <div
+              className={mensaje.tipo === 'exito' ? 'alerta-exito' : 'alerta-error'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                borderRadius: '6px',
+                marginBottom: '16px',
+                fontSize: '13px',
+                background: mensaje.tipo === 'exito' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                border: mensaje.tipo === 'exito' ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(239, 68, 68, 0.25)',
+                color: mensaje.tipo === 'exito' ? '#10B981' : '#EF4444',
+              }}
+            >
+              {mensaje.tipo === 'exito' ? <Check size={16} /> : <AlertTriangle size={16} />}
+              <span>{mensaje.texto}</span>
+            </div>
+          )}
+
+          <div className="campo-grupo">
+            <label className="campo-label">Correo Electrónico Destinatario *</label>
+            <input
+              type="email"
+              className="campo-texto"
+              value={emailDestino}
+              onChange={(e) => setEmailDestino(e.target.value)}
+              placeholder="cliente@ejemplo.com"
+              required
+            />
+            <p className="facturas__hint" style={{ marginTop: '6px' }}>
+              Se adjuntarán automáticamente el PDF (RIDE) y el XML legal firmado por el SRI.
+            </p>
+          </div>
+
+          <div className="modal__botones" style={{ marginTop: '20px' }}>
+            <button type="button" className="boton-secundario" onClick={onCerrar} disabled={enviando}>
+              Cerrar
+            </button>
+            <button type="submit" className="boton-primario" disabled={enviando || !emailDestino}>
+              <Mail size={16} />
+              <span>{enviando ? 'Enviando comprobante...' : (factura.email_enviado ? 'Reenviar Comprobante' : 'Enviar Comprobante')}</span>
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

@@ -405,3 +405,14 @@
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Botón de envío de email cuando ya fue despachado */
+.facturas__btn-email--enviado {
+  color: #10B981 !important;
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+}
+.facturas__btn-email--enviado:hover {
+  background-color: rgba(16, 185, 129, 0.2) !important;
+  color: #059669 !important;
+}

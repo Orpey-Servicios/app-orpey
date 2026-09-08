@@ -476,6 +476,8 @@ class FacturaElectronicaResponse(BaseModel):
     iva: Decimal
     total: Decimal
     created_at: datetime
+    email_enviado: bool = False
+    fecha_envio_email: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
@@ -749,3 +751,45 @@ class ServicioResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# =====================================================
+# SCHEMA: Configuración SMTP y Envío de Facturas
+# =====================================================
+
+class SmtpConfigResponse(BaseModel):
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_usuario: str = ""
+    smtp_password_configurada: bool = False
+    smtp_from_email: str = ""
+    smtp_from_nombre: str = "Orpey Servicios"
+    smtp_seguridad: str = "tls"  # tls, ssl, ninguna
+    smtp_copia_oculta: Optional[str] = None
+
+
+class SmtpConfigRequest(BaseModel):
+    smtp_host: str = Field(..., min_length=1)
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_usuario: str = Field(..., min_length=1)
+    smtp_password: Optional[str] = None
+    smtp_from_email: str = Field(..., min_length=3)
+    smtp_from_nombre: str = "Orpey Servicios"
+    smtp_seguridad: str = "tls"
+    smtp_copia_oculta: Optional[str] = None
+
+
+class SmtpTestRequest(BaseModel):
+    destinatario: str = Field(..., min_length=3)
+    smtp_host: Optional[str] = None
+    smtp_port: Optional[int] = None
+    smtp_usuario: Optional[str] = None
+    smtp_password: Optional[str] = None
+    smtp_from_email: Optional[str] = None
+    smtp_from_nombre: Optional[str] = None
+    smtp_seguridad: Optional[str] = None
+
+
+class EnviarFacturaEmailRequest(BaseModel):
+    destinatario: Optional[str] = None
+

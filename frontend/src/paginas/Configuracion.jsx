@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   Settings, Image as ImageIcon, Palette, Save, CheckCircle2, RotateCcw,
   ListPlus, Edit2, Trash2, Plus, X, ShieldCheck, AlertCircle, UploadCloud,
-  Eye, EyeOff
+  Eye, EyeOff, Mail, Send
 } from 'lucide-react';
 import {
   obtenerServicios, crearServicio, actualizarServicio, eliminarServicio,
-  obtenerInfoFirma, subirFirmaP12
+  obtenerInfoFirma, subirFirmaP12,
+  obtenerConfigSmtp, guardarConfigSmtp, probarConexionSmtp
 } from '../api/orpey-api';
 import { useAuth } from '../context/AuthContext';
 import './Configuracion.css';
@@ -34,6 +35,26 @@ export default function Configuracion() {
   const [subiendoFirma, setSubiendoFirma] = useState(false);
   const [errorFirma, setErrorFirma] = useState('');
   const [exitoFirma, setExitoFirma] = useState('');
+
+  // Servidor SMTP (Correo Saliente)
+  const [smtpConfig, setSmtpConfig] = useState({
+    smtp_host: '',
+    smtp_port: 587,
+    smtp_usuario: '',
+    smtp_password: '',
+    smtp_from_email: '',
+    smtp_from_nombre: 'Orpey Servicios',
+    smtp_seguridad: 'tls',
+    smtp_copia_oculta: '',
+    smtp_password_configurada: false,
+  });
+  const [mostrarPasswordSmtp, setMostrarPasswordSmtp] = useState(false);
+  const [cargandoSmtp, setCargandoSmtp] = useState(false);
+  const [guardandoSmtp, setGuardandoSmtp] = useState(false);
+  const [probandoSmtp, setProbandoSmtp] = useState(false);
+  const [emailPrueba, setEmailPrueba] = useState('');
+  const [errorSmtp, setErrorSmtp] = useState('');
+  const [exitoSmtp, setExitoSmtp] = useState('');
 
   useEffect(() => {
     // Cargar configuraciones actuales
@@ -74,11 +95,98 @@ export default function Configuracion() {
     }
   };
 
+  const cargarConfigSmtp = async () => {
+    if (usuario?.rol !== 'admin') return;
+    setCargandoSmtp(true);
+    try {
+      const data = await obtenerConfigSmtp();
+      if (data) {
+        setSmtpConfig({
+          smtp_host: data.smtp_host || '',
+          smtp_port: data.smtp_port || 587,
+          smtp_usuario: data.smtp_usuario || '',
+          smtp_password: '',
+          smtp_from_email: data.smtp_from_email || '',
+          smtp_from_nombre: data.smtp_from_nombre || 'Orpey Servicios',
+          smtp_seguridad: data.smtp_seguridad || 'tls',
+          smtp_copia_oculta: data.smtp_copia_oculta || '',
+          smtp_password_configurada: !!data.smtp_password_configurada,
+        });
+      }
+    } catch (err) {
+      console.error('Error al cargar config SMTP:', err);
+    } finally {
+      setCargandoSmtp(false);
+    }
+  };
+
   useEffect(() => {
     if (usuario?.rol === 'admin') {
       cargarInfoFirma();
+      cargarConfigSmtp();
     }
   }, [usuario]);
+
+  const handleGuardarSmtp = async (e) => {
+    e.preventDefault();
+    setGuardandoSmtp(true);
+    setErrorSmtp('');
+    setExitoSmtp('');
+    try {
+      const payload = {
+        smtp_host: smtpConfig.smtp_host,
+        smtp_port: Number(smtpConfig.smtp_port) || 587,
+        smtp_usuario: smtpConfig.smtp_usuario,
+        smtp_from_email: smtpConfig.smtp_from_email || smtpConfig.smtp_usuario,
+        smtp_from_nombre: smtpConfig.smtp_from_nombre || 'Orpey Servicios',
+        smtp_seguridad: smtpConfig.smtp_seguridad,
+        smtp_copia_oculta: smtpConfig.smtp_copia_oculta || null,
+      };
+      if (smtpConfig.smtp_password && smtpConfig.smtp_password.trim()) {
+        payload.smtp_password = smtpConfig.smtp_password.trim();
+      }
+      const data = await guardarConfigSmtp(payload);
+      setExitoSmtp('Configuración de correo saliente guardada con éxito.');
+      setSmtpConfig(prev => ({
+        ...prev,
+        smtp_password: '',
+        smtp_password_configurada: !!data.smtp_password_configurada,
+      }));
+    } catch (err) {
+      setErrorSmtp(err?.message || 'Error al guardar la configuración SMTP');
+    } finally {
+      setGuardandoSmtp(false);
+    }
+  };
+
+  const handleProbarSmtp = async (e) => {
+    e?.preventDefault();
+    if (!emailPrueba || !emailPrueba.includes('@')) {
+      setErrorSmtp('Ingresa un correo electrónico de destino válido para la prueba.');
+      return;
+    }
+    setProbandoSmtp(true);
+    setErrorSmtp('');
+    setExitoSmtp('');
+    try {
+      const payload = {
+        destinatario: emailPrueba.trim(),
+        smtp_host: smtpConfig.smtp_host || undefined,
+        smtp_port: Number(smtpConfig.smtp_port) || undefined,
+        smtp_usuario: smtpConfig.smtp_usuario || undefined,
+        smtp_password: smtpConfig.smtp_password?.trim() || undefined,
+        smtp_from_email: smtpConfig.smtp_from_email || undefined,
+        smtp_from_nombre: smtpConfig.smtp_from_nombre || undefined,
+        smtp_seguridad: smtpConfig.smtp_seguridad || undefined,
+      };
+      const res = await probarConexionSmtp(payload);
+      setExitoSmtp(res?.mensaje || `Correo de prueba enviado con éxito a ${emailPrueba}`);
+    } catch (err) {
+      setErrorSmtp(err?.message || 'Error al enviar correo de prueba. Verifica las credenciales.');
+    } finally {
+      setProbandoSmtp(false);
+    }
+  };
 
   const handleSubirFirma = async (e) => {
     e.preventDefault();
@@ -558,6 +666,238 @@ export default function Configuracion() {
                 </form>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. Servidor de Correo Saliente (SMTP / Envío de Facturas) */}
+      {usuario?.rol === 'admin' && (
+        <div className="configuracion-card">
+          <div className="card-header">
+            <Mail size={24} className="icono-header" />
+            <div>
+              <h3>Servidor de Correo Saliente (SMTP)</h3>
+              <p>Configura la cuenta de correo para el envío automático de facturas electrónicas y RIDE (PDF + XML) a los clientes.</p>
+            </div>
+          </div>
+
+          <div className="card-body">
+            {/* Estado actual de SMTP */}
+            <div className="smtp-status-banner" style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 16px',
+              borderRadius: '8px',
+              marginBottom: '20px',
+              background: smtpConfig.smtp_host && (smtpConfig.smtp_password_configurada || smtpConfig.smtp_password)
+                ? 'rgba(16, 185, 129, 0.1)'
+                : 'rgba(245, 158, 11, 0.1)',
+              border: smtpConfig.smtp_host && (smtpConfig.smtp_password_configurada || smtpConfig.smtp_password)
+                ? '1px solid rgba(16, 185, 129, 0.25)'
+                : '1px solid rgba(245, 158, 11, 0.25)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                {smtpConfig.smtp_host && (smtpConfig.smtp_password_configurada || smtpConfig.smtp_password) ? (
+                  <CheckCircle2 size={20} style={{ color: '#10B981' }} />
+                ) : (
+                  <AlertCircle size={20} style={{ color: '#F59E0B' }} />
+                )}
+                <div>
+                  <div style={{ fontWeight: '600', fontSize: '14px', color: smtpConfig.smtp_host && (smtpConfig.smtp_password_configurada || smtpConfig.smtp_password) ? '#10B981' : '#F59E0B' }}>
+                    {smtpConfig.smtp_host && (smtpConfig.smtp_password_configurada || smtpConfig.smtp_password)
+                      ? 'Servidor SMTP Configurado'
+                      : 'Servidor SMTP No Configurado'}
+                  </div>
+                  <div style={{ fontSize: '12px', color: 'var(--texto-secundario)' }}>
+                    {smtpConfig.smtp_host
+                      ? `Conectado a ${smtpConfig.smtp_host}:${smtpConfig.smtp_port} (${smtpConfig.smtp_seguridad.toUpperCase()})`
+                      : 'Sin credenciales configuradas. Las facturas autorizadas no podrán ser despachadas por correo.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {errorSmtp && (
+              <div className="alerta-error" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '6px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#EF4444', fontSize: '13px' }}>
+                <AlertCircle size={16} />
+                <span>{errorSmtp}</span>
+              </div>
+            )}
+
+            {exitoSmtp && (
+              <div className="alerta-exito" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '6px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10B981', fontSize: '13px' }}>
+                <CheckCircle2 size={16} />
+                <span>{exitoSmtp}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleGuardarSmtp}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Servidor SMTP (Host)</label>
+                  <input
+                    type="text"
+                    value={smtpConfig.smtp_host}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_host: e.target.value })}
+                    placeholder="smtp.gmail.com o mail.orpey.com"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Puerto</label>
+                  <input
+                    type="number"
+                    value={smtpConfig.smtp_port}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_port: e.target.value })}
+                    placeholder="587 o 465"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Usuario / Correo Autenticación</label>
+                  <input
+                    type="text"
+                    value={smtpConfig.smtp_usuario}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_usuario: e.target.value })}
+                    placeholder="facturacion@orpey.com"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>
+                    Contraseña {smtpConfig.smtp_password_configurada && <span style={{ fontSize: '11px', color: '#10B981', fontWeight: 'normal' }}>(Configurada)</span>}
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={mostrarPasswordSmtp ? 'text' : 'password'}
+                      value={smtpConfig.smtp_password}
+                      onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_password: e.target.value })}
+                      placeholder={smtpConfig.smtp_password_configurada ? 'Dejar vacío para no cambiar' : 'Contraseña o App Password'}
+                      className="campo-texto"
+                      style={{ width: '100%', paddingRight: '38px' }}
+                      required={!smtpConfig.smtp_password_configurada}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMostrarPasswordSmtp(!mostrarPasswordSmtp)}
+                      style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--texto-secundario)' }}
+                    >
+                      {mostrarPasswordSmtp ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Nombre del Remitente</label>
+                  <input
+                    type="text"
+                    value={smtpConfig.smtp_from_nombre}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_from_nombre: e.target.value })}
+                    placeholder="Orpey Servicios"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Correo Remitente (From)</label>
+                  <input
+                    type="email"
+                    value={smtpConfig.smtp_from_email}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_from_email: e.target.value })}
+                    placeholder="facturacion@orpey.com"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                    required
+                  />
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Seguridad de Conexión</label>
+                  <select
+                    value={smtpConfig.smtp_seguridad}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_seguridad: e.target.value })}
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                  >
+                    <option value="tls">STARTTLS (Recomendado para puerto 587)</option>
+                    <option value="ssl">SSL / TLS Directo (Puerto 465)</option>
+                    <option value="ninguna">Sin cifrado (No recomendado / Puerto 25)</option>
+                  </select>
+                </div>
+
+                <div className="form-grupo" style={{ marginBottom: 0 }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500' }}>Copia Oculta (BCC - Opcional)</label>
+                  <input
+                    type="email"
+                    value={smtpConfig.smtp_copia_oculta}
+                    onChange={(e) => setSmtpConfig({ ...smtpConfig, smtp_copia_oculta: e.target.value })}
+                    placeholder="gerencia@orpey.com"
+                    className="campo-texto"
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '24px' }}>
+                <button
+                  type="submit"
+                  className="boton-primario"
+                  disabled={guardandoSmtp || cargandoSmtp}
+                  style={{ height: '38px', padding: '0 20px' }}
+                >
+                  <Save size={18} />
+                  <span>{guardandoSmtp ? 'Guardando...' : 'Guardar Configuración'}</span>
+                </button>
+              </div>
+            </form>
+
+            {/* Subsección: Prueba de Conexión y Envío */}
+            <div style={{
+              background: 'var(--fondo-principal)',
+              borderRadius: '8px',
+              border: '1px solid var(--borde-color)',
+              padding: '18px 20px',
+            }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Send size={16} />
+                <span>Probar Conexión y Envío de Correo</span>
+              </h4>
+              <p style={{ margin: '0 0 14px 0', fontSize: '13px', color: 'var(--texto-secundario)' }}>
+                Envía un correo de prueba instantáneo para comprobar que los datos SMTP ingresados funcionan sin errores.
+              </p>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', maxWidth: '500px' }}>
+                <input
+                  type="email"
+                  value={emailPrueba}
+                  onChange={(e) => setEmailPrueba(e.target.value)}
+                  placeholder="ejemplo@correo.com"
+                  className="campo-texto"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={handleProbarSmtp}
+                  className="boton-secundario"
+                  disabled={probandoSmtp || !emailPrueba}
+                  style={{ height: '38px', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px' }}
+                >
+                  <Send size={16} />
+                  <span>{probandoSmtp ? 'Enviando prueba...' : 'Probar Envío'}</span>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}

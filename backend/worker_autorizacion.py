@@ -88,6 +88,14 @@ async def procesar_pendiente(db: AsyncSession, factura: FacturaElectronica, ruta
             "autorizado",
             detalle=f"N° autorización: {numero}".strip(),
         )
+
+        # Despachar automáticamente comprobante electrónico (PDF + XML) al correo del cliente
+        try:
+            from src.services.email_factura import enviar_factura_email
+            await enviar_factura_email(db, factura.id)
+        except Exception as mail_exc:
+            logger.warning("Factura %s: no se pudo despachar correo: %s", factura.numero_documento, mail_exc)
+
         return "autorizado"
 
     elif estado in ("DEVUELTA", "NO AUTORIZADO"):

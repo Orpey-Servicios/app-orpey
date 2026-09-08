@@ -18,6 +18,7 @@ FLUJO (fase 2 - TRANSMISIÓN):
   producción (o viceversa) para testing.
 """
 
+import asyncio
 import base64
 import os
 from datetime import datetime, time
@@ -49,6 +50,13 @@ from src.models.models import (
 )
 from src.schemas.schemas import (
     FacturaElectronicaCreate, FacturaElectronicaResponse, NotaCreditoRequest,
+    SmtpConfigResponse, SmtpConfigRequest, SmtpTestRequest, EnviarFacturaEmailRequest,
+)
+from src.services.email_factura import (
+    obtener_config_smtp,
+    probar_conexion_smtp,
+    enviar_factura_email,
+    tarea_enviar_factura_segundo_plano,
 )
 from src.services.facturacion_sri import (
     _round2,
@@ -971,6 +979,10 @@ async def transmitir_factura(
         )
     await db.refresh(factura)
 
+    # Despachar automáticamente comprobante electrónico (PDF + XML) al cliente en segundo plano
+    if factura.estado_sri == "autorizado":
+        asyncio.create_task(tarea_enviar_factura_segundo_plano(factura.id))
+
     return {
         "id": factura.id,
         "clave_acceso": factura.clave_acceso,
@@ -1266,6 +1278,10 @@ async def anular_factura(
     await db.refresh(nota_credito)
     await db.refresh(factura)
 
+    # Despachar automáticamente comprobante electrónico de la NC al cliente en segundo plano
+    if nota_credito.estado_sri == "autorizado":
+        asyncio.create_task(tarea_enviar_factura_segundo_plano(nota_credito.id))
+
     return {
         "nota_credito": _serializar(nota_credito),
         "factura_original": _serializar(factura),
@@ -1414,3 +1430,148 @@ async def subir_firma_digital(
     info["configurada"] = True
     info["mensaje"] = "Certificado digital instalado y validado exitosamente"
     return info
+
+
+# =====================================================
+# GESTIÓN DE SERVIDOR SMTP Y ENVÍO DE COMPROBANTES
+# =====================================================
+
+@router.get(
+    "/smtp/config",
+    response_model=SmtpConfigResponse,
+    summary="Obtener configuración de correo saliente (SMTP)",
+)
+async def obtener_configuracion_smtp_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Devuelve los parámetros del servidor SMTP configurados (con contraseña enmascarada)."""
+    if current_user.rol != RolUsuario.admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden consultar la configuración SMTP")
+
+    cfg = await obtener_config_smtp(db)
+    return SmtpConfigResponse(
+        smtp_host=cfg["smtp_host"],
+        smtp_port=cfg["smtp_port"],
+        smtp_usuario=cfg["smtp_usuario"],
+        smtp_password_configurada=bool(cfg["smtp_password"]),
+        smtp_from_email=cfg["smtp_from_email"],
+        smtp_from_nombre=cfg["smtp_from_nombre"],
+        smtp_seguridad=cfg["smtp_seguridad"],
+        smtp_copia_oculta=cfg["smtp_copia_oculta"],
+    )
+
+
+@router.post(
+    "/smtp/config",
+    response_model=SmtpConfigResponse,
+    summary="Guardar configuración de correo saliente (SMTP)",
+)
+async def guardar_configuracion_smtp_endpoint(
+    datos: SmtpConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Actualiza o crea las claves de configuración SMTP en configuracion_sistema."""
+    if current_user.rol != RolUsuario.admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden modificar la configuración SMTP")
+
+    claves = {
+        "smtp_host": (datos.smtp_host.strip(), "Servidor SMTP saliente"),
+        "smtp_port": (str(datos.smtp_port), "Puerto del servidor SMTP (587, 465, 25)"),
+        "smtp_usuario": (datos.smtp_usuario.strip(), "Usuario o correo para autenticación SMTP"),
+        "smtp_from_email": (datos.smtp_from_email.strip(), "Dirección de correo remitente"),
+        "smtp_from_nombre": (datos.smtp_from_nombre.strip(), "Nombre mostrado del remitente"),
+        "smtp_seguridad": (datos.smtp_seguridad.strip().lower(), "Seguridad de conexión SMTP (tls, ssl, ninguna)"),
+        "smtp_copia_oculta": (datos.smtp_copia_oculta.strip() if datos.smtp_copia_oculta else "", "Copia oculta BCC de comprobantes emitidos"),
+    }
+    if datos.smtp_password is not None and datos.smtp_password.strip():
+        claves["smtp_password"] = (datos.smtp_password.strip(), "Contraseña o App Password del servidor SMTP")
+
+    for k, (v, desc) in claves.items():
+        res = await db.execute(select(ConfiguracionSistema).where(ConfiguracionSistema.clave == k))
+        item = res.scalar_one_or_none()
+        if item:
+            item.valor = v
+        else:
+            db.add(ConfiguracionSistema(clave=k, valor=v, descripcion=desc))
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error al guardar configuración SMTP: {exc}")
+
+    cfg = await obtener_config_smtp(db)
+    return SmtpConfigResponse(
+        smtp_host=cfg["smtp_host"],
+        smtp_port=cfg["smtp_port"],
+        smtp_usuario=cfg["smtp_usuario"],
+        smtp_password_configurada=bool(cfg["smtp_password"]),
+        smtp_from_email=cfg["smtp_from_email"],
+        smtp_from_nombre=cfg["smtp_from_nombre"],
+        smtp_seguridad=cfg["smtp_seguridad"],
+        smtp_copia_oculta=cfg["smtp_copia_oculta"],
+    )
+
+
+@router.post(
+    "/smtp/test",
+    summary="Probar conexión SMTP enviando un correo de prueba",
+)
+async def probar_smtp_endpoint(
+    datos: SmtpTestRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Envía un correo de prueba usando la configuración actual o los parámetros enviados."""
+    if current_user.rol != RolUsuario.admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden realizar pruebas SMTP")
+
+    cfg_base = await obtener_config_smtp(db)
+    config_efectiva = dict(cfg_base)
+    if datos.smtp_host:
+        config_efectiva["smtp_host"] = datos.smtp_host
+    if datos.smtp_port:
+        config_efectiva["smtp_port"] = datos.smtp_port
+    if datos.smtp_usuario:
+        config_efectiva["smtp_usuario"] = datos.smtp_usuario
+    if datos.smtp_password:
+        config_efectiva["smtp_password"] = datos.smtp_password
+    if datos.smtp_from_email:
+        config_efectiva["smtp_from_email"] = datos.smtp_from_email
+    if datos.smtp_from_nombre:
+        config_efectiva["smtp_from_nombre"] = datos.smtp_from_nombre
+    if datos.smtp_seguridad:
+        config_efectiva["smtp_seguridad"] = datos.smtp_seguridad
+
+    try:
+        resultado = await probar_conexion_smtp(config_efectiva, datos.destinatario)
+        return resultado
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Error en prueba SMTP: {exc}")
+
+
+@router.post(
+    "/{factura_id}/enviar-email",
+    summary="Enviar comprobante electrónico por correo al cliente",
+)
+async def enviar_comprobante_email_endpoint(
+    factura_id: int,
+    datos: Optional[EnviarFacturaEmailRequest] = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    """Genera el RIDE PDF y adjunta el XML legal para despacharlo por correo al cliente."""
+    destinatario = datos.destinatario if datos else None
+    try:
+        resultado = await enviar_factura_email(db, factura_id, destinatario)
+    except ValueError as val_err:
+        raise HTTPException(status_code=404, detail=str(val_err))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Error inesperado al despachar correo: {exc}")
+
+    if not resultado.get("enviado"):
+        raise HTTPException(status_code=400, detail=resultado.get("motivo", "No se pudo enviar el correo"))
+
+    return resultado

@@ -463,6 +463,9 @@ class FacturaElectronica(Base):
     iva = Column(Numeric(10, 2), nullable=False)
     total = Column(Numeric(10, 2), nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+    # Auditoría de envío de comprobante por correo (PDF + XML)
+    email_enviado = Column(Boolean, default=False, nullable=False)
+    fecha_envio_email = Column(DateTime, nullable=True)
 
     # Relaciones
     orden = relationship("OrdenServicio", foreign_keys=[orden_servicio_id])

@@ -685,6 +685,8 @@ export async function obtenerFacturas() {
     numero_autorizacion: f?.numero_autorizacion,
     fecha_autorizacion: f?.fecha_autorizacion,
     xml_respuesta_sri: f?.xml_respuesta_sri,
+    email_enviado: f?.email_enviado ?? false,
+    fecha_envio_email: f?.fecha_envio_email ?? null,
   }));
 }
 
@@ -866,3 +868,53 @@ export async function eliminarServicio(id) {
     method: 'DELETE',
   });
 }
+
+/* ============================================================
+   CONFIGURACIÓN SMTP Y ENVÍO DE COMPROBANTES POR CORREO
+   ============================================================ */
+
+/**
+ * Obtener la configuración actual del servidor SMTP saliente.
+ * @returns {Promise<Object>} Datos de configuración (host, puerto, etc.)
+ */
+export async function obtenerConfigSmtp() {
+  return hacerPeticion('/api/facturacion/smtp/config');
+}
+
+/**
+ * Guardar la configuración del servidor SMTP.
+ * @param {Object} datos - { smtp_host, smtp_port, smtp_usuario, smtp_password, smtp_from_email, smtp_from_nombre, smtp_seguridad, smtp_copia_oculta }
+ * @returns {Promise<Object>} Configuración guardada
+ */
+export async function guardarConfigSmtp(datos) {
+  return hacerPeticion('/api/facturacion/smtp/config', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Enviar un correo de prueba para verificar conectividad SMTP.
+ * @param {Object} datos - { destinatario, smtp_host?, smtp_port?, ... }
+ * @returns {Promise<Object>} { mensaje }
+ */
+export async function probarConexionSmtp(datos) {
+  return hacerPeticion('/api/facturacion/smtp/test', {
+    method: 'POST',
+    body: datos,
+  });
+}
+
+/**
+ * Despachar comprobante electrónico (PDF RIDE + XML) por correo al cliente.
+ * @param {number} facturaId - ID de la factura o nota de crédito
+ * @param {Object} [datos] - { destinatario?: string }
+ * @returns {Promise<Object>} { enviado, destinatario, mensaje }
+ */
+export async function enviarFacturaEmail(facturaId, datos = {}) {
+  return hacerPeticion(`/api/facturacion/${facturaId}/enviar-email`, {
+    method: 'POST',
+    body: datos,
+  });
+}
+
