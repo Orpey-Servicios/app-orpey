@@ -326,6 +326,7 @@ async def obtener_orden(
         fecha_cierre=orden.fecha_cierre,
         created_at=orden.created_at,
         equipos=equipos_detalle,
+        factura=orden.factura,
     )
 
 
