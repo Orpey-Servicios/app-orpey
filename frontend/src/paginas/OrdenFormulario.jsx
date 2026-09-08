@@ -7,11 +7,12 @@
  */
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Save, ArrowLeft, Search, UserPlus, X, FileDown, MessageCircle, CheckCircle, Plus, Settings2, Edit2, Check } from 'lucide-react';
+import { Save, ArrowLeft, Search, UserPlus, X, FileDown, MessageCircle, CheckCircle, Plus, Settings2, Edit2, Check, Building2, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
   obtenerClientes, obtenerTecnicos, crearOrden, obtenerOrden, actualizarOrden,
-  crearCliente, descargarPdfOrden, obtenerWhatsappOrden, obtenerServicios, crearServicio
+  crearCliente, descargarPdfOrden, obtenerWhatsappOrden, obtenerServicios, crearServicio,
+  consultarSri
 } from '../api/orpey-api';
 import CreatableSelect from 'react-select/creatable';
 import './OrdenFormulario.css';
@@ -169,6 +170,8 @@ export default function OrdenFormulario() {
   const [formCliente, setFormCliente] = useState(FORM_CLIENTE_INICIAL);
   const [guardandoCliente, setGuardandoCliente] = useState(false);
   const [errorCliente, setErrorCliente] = useState(null);
+  const [consultandoSri, setConsultandoSri] = useState(false);
+  const [mensajeSri, setMensajeSri] = useState(null);
 
   // ── Estado: modal de éxito al crear orden ───────────────────────────
   const [ordenCreada, setOrdenCreada] = useState(null); // guarda la orden recién creada
@@ -426,6 +429,64 @@ const guardarEdicionConfig = (itemStrViejo) => {
     setForm(prev => ({ ...prev, cliente_id: cliente.id }));
     setBuscarCliente(`${cliente.nombre} ${cliente.apellido}`);
     setMostrarClientes(false);
+    setMensajeSri(null);
+  }
+
+  // ── Consultar SRI Ecuador ──────────────────────────────────────────
+  async function ejecutarConsultaSri(identificacion) {
+    const num = (identificacion || formCliente.cedula_ruc || '').replace(/\D/g, '');
+    if (!num) return;
+
+    try {
+      setConsultandoSri(true);
+      setErrorCliente(null);
+      setMensajeSri(null);
+      setMostrarClientes(false);
+
+      const res = await consultarSri(num);
+      setMostrarFormCliente(true);
+
+      if (res.encontrado) {
+        setFormCliente(prev => ({
+          ...prev,
+          nombre: res.nombre || prev.nombre,
+          apellido: res.apellido || prev.apellido,
+          cedula_ruc: res.identificacion,
+          direccion: res.direccion || prev.direccion,
+          tipo_persona: res.tipo_persona || 'natural',
+        }));
+        setMensajeSri({
+          tipo: 'exito',
+          texto: `✅ SRI: ${res.razon_social} (${res.tipo_contribuyente || 'Contribuyente'} - ${res.estado})`
+        });
+      } else if (res.valido) {
+        setFormCliente(prev => ({
+          ...prev,
+          cedula_ruc: res.identificacion
+        }));
+        setMensajeSri({
+          tipo: 'advertencia',
+          texto: `ℹ️ ${res.mensaje || 'Identificación válida en Ecuador, pero sin actividad registrada en SRI. Complete los datos manualmente.'}`
+        });
+      } else {
+        setFormCliente(prev => ({
+          ...prev,
+          cedula_ruc: res.identificacion
+        }));
+        setMensajeSri({
+          tipo: 'error',
+          texto: `⚠️ ${res.mensaje || 'Identificación no válida según Registro Civil/SRI.'}`
+        });
+      }
+    } catch (err) {
+      setMostrarFormCliente(true);
+      setMensajeSri({
+        tipo: 'error',
+        texto: `⚠️ Error al consultar SRI: ${err.message}`
+      });
+    } finally {
+      setConsultandoSri(false);
+    }
   }
 
   // ── Crear nuevo cliente inline ───────────────────────────────────────
@@ -668,21 +729,93 @@ const guardarEdicionConfig = (itemStrViejo) => {
                     value={buscarCliente}
                     onChange={(e) => { setBuscarCliente(e.target.value); setMostrarClientes(true); }}
                     onFocus={() => setMostrarClientes(true)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const idLimpia = (buscarCliente || '').replace(/\D/g, '');
+                        if (idLimpia.length === 10 || idLimpia.length === 13) {
+                          e.preventDefault();
+                          ejecutarConsultaSri(idLimpia);
+                        }
+                      }
+                    }}
                     id="buscar-cliente-orden"
                   />
                 </div>
-                {mostrarClientes && buscarCliente && (
-                  <div className="autocomplete__lista">
-                    {clientesFiltrados.length === 0 ? (
-                      <div className="autocomplete__vacio">No se encontraron clientes</div>
-                    ) : clientesFiltrados.slice(0, 8).map(c => (
-                      <div key={c.id} className="autocomplete__item" onClick={() => seleccionarCliente(c)}>
-                        <strong>{c.nombre} {c.apellido}</strong>
-                        <span>{c.telefono} {c.cedula_ruc ? `• ${c.cedula_ruc}` : ''}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {mostrarClientes && buscarCliente && (() => {
+                  const idBuscada = (buscarCliente || '').replace(/\D/g, '');
+                  const esIdPotencial = idBuscada.length === 10 || idBuscada.length === 13;
+                  return (
+                    <div className="autocomplete__lista">
+                      {clientesFiltrados.length === 0 ? (
+                        <div className="autocomplete__vacio" style={{ padding: '14px' }}>
+                          <p style={{ margin: '0 0 10px 0', color: '#4b5563', fontSize: '13px' }}>
+                            No se encontró a <strong>"{buscarCliente}"</strong> en los clientes locales.
+                          </p>
+                          {esIdPotencial ? (
+                            <button
+                              type="button"
+                              className="boton-primario"
+                              style={{
+                                width: '100%',
+                                padding: '10px 14px',
+                                fontSize: '13px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                gap: '8px',
+                                backgroundColor: '#1d4ed8',
+                                borderRadius: '8px',
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => ejecutarConsultaSri(idBuscada)}
+                              disabled={consultandoSri}
+                            >
+                              {consultandoSri ? <Loader2 size={16} className="animar-spin" /> : <Building2 size={16} />}
+                              {consultandoSri ? 'Consultando en SRI Ecuador...' : `🔍 Consultar ${idBuscada} en el SRI`}
+                            </button>
+                          ) : (
+                            <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>
+                              💡 Ingresa 10 dígitos (Cédula) o 13 (RUC) para autocompletar datos oficiales desde el SRI.
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <>
+                          {clientesFiltrados.slice(0, 8).map(c => (
+                            <div key={c.id} className="autocomplete__item" onClick={() => seleccionarCliente(c)}>
+                              <strong>{c.nombre} {c.apellido}</strong>
+                              <span>{c.telefono} {c.cedula_ruc ? `• ${c.cedula_ruc}` : ''}</span>
+                            </div>
+                          ))}
+                          {esIdPotencial && (
+                            <div
+                              className="autocomplete__item"
+                              onClick={() => ejecutarConsultaSri(idBuscada)}
+                              style={{
+                                backgroundColor: '#eff6ff',
+                                borderTop: '1px solid #bfdbfe',
+                                color: '#1e40af',
+                                padding: '10px 14px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {consultandoSri ? <Loader2 size={16} className="animar-spin" /> : <Building2 size={16} color="#2563eb" />}
+                                <span>{consultandoSri ? 'Consultando SRI...' : <>Consultar <strong>{idBuscada}</strong> en SRI Ecuador</>}</span>
+                              </div>
+                              <span style={{ fontSize: '11px', background: '#dbeafe', color: '#1e40af', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold' }}>
+                                Auto-completar
+                              </span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
               {clienteSeleccionado && (
                 <div className="cliente-seleccionado">
@@ -747,6 +880,33 @@ const guardarEdicionConfig = (itemStrViejo) => {
             <div className="nuevo-cliente-panel animar-entrada">
               <h4 className="nuevo-cliente-panel__titulo">✏️ Registrar Nuevo Cliente</h4>
 
+              {mensajeSri && (
+                <div
+                  style={{
+                    marginBottom: '16px',
+                    padding: '10px 14px',
+                    borderRadius: '8px',
+                    fontSize: '13px',
+                    lineHeight: '1.4',
+                    backgroundColor: mensajeSri.tipo === 'exito' ? '#f0fdf4' : mensajeSri.tipo === 'advertencia' ? '#fefce8' : '#fef2f2',
+                    border: `1px solid ${mensajeSri.tipo === 'exito' ? '#86efac' : mensajeSri.tipo === 'advertencia' ? '#fde047' : '#fca5a5'}`,
+                    color: mensajeSri.tipo === 'exito' ? '#166534' : mensajeSri.tipo === 'advertencia' ? '#854d0e' : '#991b1b',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}
+                >
+                  <span>{mensajeSri.texto}</span>
+                  <button
+                    type="button"
+                    onClick={() => setMensajeSri(null)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: '2px', marginLeft: '8px' }}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {errorCliente && (
                 <div className="dashboard__error" style={{ marginBottom: '16px' }}>
                   <p>⚠️ {errorCliente}</p>
@@ -785,13 +945,49 @@ const guardarEdicionConfig = (itemStrViejo) => {
                     />
                   </div>
                   <div className="campo-grupo">
-                    <label className="campo-label">Cédula / RUC *</label>
-                    <input
-                      type="text" className="campo-texto" placeholder="Ej: 0903803575"
-                      value={formCliente.cedula_ruc}
-                      onChange={e => setFormCliente(p => ({ ...p, cedula_ruc: e.target.value }))}
-                      id="nc-cedula"
-                    />
+                    <label className="campo-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Cédula / RUC *</span>
+                      <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: '500' }}>Catastro SRI</span>
+                    </label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="text"
+                        className="campo-texto"
+                        placeholder="Ej: 0903803575 o 1790016919001"
+                        value={formCliente.cedula_ruc}
+                        onChange={e => setFormCliente(p => ({ ...p, cedula_ruc: e.target.value }))}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            ejecutarConsultaSri(formCliente.cedula_ruc);
+                          }
+                        }}
+                        id="nc-cedula"
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="boton-secundario"
+                        onClick={() => ejecutarConsultaSri(formCliente.cedula_ruc)}
+                        disabled={consultandoSri || !formCliente.cedula_ruc}
+                        title="Consultar y autocompletar desde SRI Ecuador"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          padding: '0 12px',
+                          whiteSpace: 'nowrap',
+                          fontSize: '13px',
+                          backgroundColor: '#eff6ff',
+                          borderColor: '#bfdbfe',
+                          color: '#1d4ed8',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {consultandoSri ? <Loader2 size={14} className="animar-spin" /> : <Building2 size={14} />}
+                        {consultandoSri ? 'Buscando...' : 'SRI'}
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div className="orden-form__grid-2">

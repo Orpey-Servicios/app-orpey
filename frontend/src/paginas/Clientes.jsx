@@ -3,8 +3,8 @@
  */
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Search, Users, X, Save } from 'lucide-react';
-import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente } from '../api/orpey-api';
+import { Plus, Search, Users, X, Save, Building2, Loader2 } from 'lucide-react';
+import { obtenerClientes, crearCliente, actualizarCliente, eliminarCliente, consultarSri } from '../api/orpey-api';
 import './Clientes.css';
 
 export default function Clientes() {
@@ -116,11 +116,60 @@ function ModalCliente({ cliente, onCerrar, onGuardado }) {
   });
   const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState(null);
+  const [consultandoSri, setConsultandoSri] = useState(false);
+  const [mensajeSri, setMensajeSri] = useState(null);
 
   // Función para formatear texto como Título
   const formatearTexto = (texto) => {
     return texto.toLowerCase().replace(/(?:^|\s)\S/g, a => a.toUpperCase());
   };
+
+  async function ejecutarConsultaSri(identificacion) {
+    const num = (identificacion || form.cedula_ruc || '').replace(/\D/g, '');
+    if (!num) return;
+
+    try {
+      setConsultandoSri(true);
+      setError(null);
+      setMensajeSri(null);
+
+      const res = await consultarSri(num);
+
+      if (res.encontrado) {
+        setForm(prev => ({
+          ...prev,
+          nombre: res.nombre || prev.nombre,
+          apellido: res.apellido || prev.apellido,
+          cedula_ruc: res.identificacion,
+          direccion: res.direccion || prev.direccion,
+          tipo_persona: res.tipo_persona || 'natural',
+        }));
+        setMensajeSri({
+          tipo: 'exito',
+          texto: `✅ SRI: ${res.razon_social} (${res.tipo_contribuyente || 'Contribuyente'} - ${res.estado})`
+        });
+      } else if (res.valido) {
+        setForm(prev => ({ ...prev, cedula_ruc: res.identificacion }));
+        setMensajeSri({
+          tipo: 'advertencia',
+          texto: `ℹ️ ${res.mensaje || 'Identificación válida en Ecuador, pero sin actividad registrada en SRI.'}`
+        });
+      } else {
+        setForm(prev => ({ ...prev, cedula_ruc: res.identificacion }));
+        setMensajeSri({
+          tipo: 'error',
+          texto: `⚠️ ${res.mensaje || 'Identificación no válida según Registro Civil/SRI.'}`
+        });
+      }
+    } catch (err) {
+      setMensajeSri({
+        tipo: 'error',
+        texto: `⚠️ Error al consultar SRI: ${err.message}`
+      });
+    } finally {
+      setConsultandoSri(false);
+    }
+  }
 
   async function guardar(e) {
     e.preventDefault();
@@ -155,6 +204,32 @@ function ModalCliente({ cliente, onCerrar, onGuardado }) {
           <h3>{esEdicion ? 'Editar Cliente' : 'Nuevo Cliente'}</h3>
           <button className="boton-icono" onClick={onCerrar}><X size={20} /></button>
         </div>
+        {mensajeSri && (
+          <div
+            style={{
+              margin: '0 0 16px',
+              padding: '10px 14px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              lineHeight: '1.4',
+              backgroundColor: mensajeSri.tipo === 'exito' ? '#f0fdf4' : mensajeSri.tipo === 'advertencia' ? '#fefce8' : '#fef2f2',
+              border: `1px solid ${mensajeSri.tipo === 'exito' ? '#86efac' : mensajeSri.tipo === 'advertencia' ? '#fde047' : '#fca5a5'}`,
+              color: mensajeSri.tipo === 'exito' ? '#166534' : mensajeSri.tipo === 'advertencia' ? '#854d0e' : '#991b1b',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between'
+            }}
+          >
+            <span>{mensajeSri.texto}</span>
+            <button
+              type="button"
+              onClick={() => setMensajeSri(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'inherit', padding: '2px', marginLeft: '8px' }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
         {error && <div className="dashboard__error" style={{margin: '0 0 16px'}}><p>{error}</p></div>}
         <form onSubmit={guardar}>
           <div className="orden-form__grid-2">
@@ -173,8 +248,48 @@ function ModalCliente({ cliente, onCerrar, onGuardado }) {
               <input type="text" className="campo-texto" placeholder="0985983416" value={form.telefono} onChange={(e) => setForm(p => ({...p, telefono: e.target.value.replace(/\D/g, '').slice(0, 10)}))} />
             </div>
             <div className="campo-grupo">
-              <label className="campo-label">Cédula / RUC *</label>
-              <input type="text" className="campo-texto" placeholder="0903803575" value={form.cedula_ruc} onChange={(e) => setForm(p => ({...p, cedula_ruc: e.target.value}))} />
+              <label className="campo-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>Cédula / RUC *</span>
+                <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: '500' }}>Catastro SRI</span>
+              </label>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  type="text"
+                  className="campo-texto"
+                  placeholder="0903803575 o 1790016919001"
+                  value={form.cedula_ruc}
+                  onChange={(e) => setForm(p => ({...p, cedula_ruc: e.target.value}))}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      ejecutarConsultaSri(form.cedula_ruc);
+                    }
+                  }}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  className="boton-secundario"
+                  onClick={() => ejecutarConsultaSri(form.cedula_ruc)}
+                  disabled={consultandoSri || !form.cedula_ruc}
+                  title="Consultar y autocompletar desde SRI Ecuador"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '0 12px',
+                    whiteSpace: 'nowrap',
+                    fontSize: '13px',
+                    backgroundColor: '#eff6ff',
+                    borderColor: '#bfdbfe',
+                    color: '#1d4ed8',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {consultandoSri ? <Loader2 size={14} className="animar-spin" /> : <Building2 size={14} />}
+                  {consultandoSri ? 'Buscando...' : 'SRI'}
+                </button>
+              </div>
             </div>
           </div>
           <div className="campo-grupo">

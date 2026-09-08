@@ -22,6 +22,7 @@ from src.models.models import Cliente
 from src.schemas.schemas import (
     ClienteCreate, ClienteUpdate, ClienteResponse
 )
+from src.services.consulta_ruc_sri import consultar_sri
 
 router = APIRouter(
     prefix="/api/clientes",  # Todas las rutas empiezan con /api/clientes
@@ -65,28 +66,45 @@ async def crear_cliente(
     "/",
     response_model=List[ClienteResponse],
     summary="Listar todos los clientes",
-    description="Devuelve una lista de todos los clientes. Se pueden filtrar por nombre."
+    description="Devuelve una lista de todos los clientes. Se pueden filtrar por nombre, apellido, cédula/RUC o teléfono."
 )
 async def listar_clientes(
-    buscar: str = Query(None, description="Buscar por nombre o apellido"),
+    buscar: str = Query(None, description="Buscar por nombre, apellido, cédula/RUC o teléfono"),
     db: AsyncSession = Depends(get_db)
 ):
     """
     Lista todos los clientes.
-    Si se pasa ?buscar=gerardo, filtra por nombre o apellido.
+    Si se pasa ?buscar=..., filtra por nombre, apellido, cédula o teléfono.
     """
     query = select(Cliente).where(Cliente.activo == True)
 
     if buscar:
-        # Búsqueda insensible a mayúsculas/minúsculas
+        termino = f"%{buscar}%"
         query = query.where(
-            Cliente.nombre.ilike(f"%{buscar}%") |
-            Cliente.apellido.ilike(f"%{buscar}%")
+            Cliente.nombre.ilike(termino) |
+            Cliente.apellido.ilike(termino) |
+            Cliente.cedula_ruc.ilike(termino) |
+            Cliente.telefono.ilike(termino)
         )
 
     query = query.order_by(Cliente.nombre)
     result = await db.execute(query)
     return result.scalars().all()
+
+
+@router.get(
+    "/consultar-sri/{identificacion}",
+    summary="Consultar datos de cliente en SRI Ecuador",
+    description="Valida y consulta en tiempo real una Cédula (10 dígitos) o RUC (13 dígitos) en el catastro del SRI."
+)
+async def consultar_cliente_en_sri(
+    identificacion: str
+):
+    """
+    Consulta en el SRI Ecuador los datos tributarios de una persona natural o sociedad.
+    Retorna razón social, nombre, apellido, dirección, estado, régimen y tipo de contribuyente.
+    """
+    return await consultar_sri(identificacion)
 
 
 @router.get(

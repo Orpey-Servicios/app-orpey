@@ -160,6 +160,16 @@ export async function eliminarCliente(id) {
   });
 }
 
+/**
+ * Consultar datos de un contribuyente en el SRI Ecuador por Cédula o RUC.
+ * @param {string} identificacion - Cédula (10 dígitos) o RUC (13 dígitos)
+ * @returns {Promise<Object>} - Datos del contribuyente (razon_social, nombre, apellido, direccion, etc.)
+ */
+export async function consultarSri(identificacion) {
+  const limpio = (identificacion || '').replace(/\D/g, '');
+  return hacerPeticion(`/api/clientes/consultar-sri/${limpio}`);
+}
+
 /* ============================================================
    ÓRDENES DE SERVICIO
    ============================================================ */
