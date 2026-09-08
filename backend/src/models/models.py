@@ -243,6 +243,13 @@ class OrdenServicio(Base):
     equipos = relationship("EquipoOrden", back_populates="orden", cascade="all, delete-orphan")
     pagos = relationship("PagoOrden", back_populates="orden", cascade="all, delete-orphan", order_by="PagoOrden.created_at.desc()")
     notas = relationship("NotaOrden", back_populates="orden", cascade="all, delete-orphan", order_by="NotaOrden.created_at.desc()")
+    factura = relationship(
+        "FacturaElectronica",
+        foreign_keys="FacturaElectronica.orden_servicio_id",
+        primaryjoin="and_(OrdenServicio.id == FacturaElectronica.orden_servicio_id, FacturaElectronica.tipo_comprobante == '01', FacturaElectronica.estado_sri != 'anulada')",
+        uselist=False,
+        viewonly=True,
+    )
 
 
 # =====================================================

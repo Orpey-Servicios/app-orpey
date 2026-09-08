@@ -22,6 +22,8 @@ import {
   obtenerFacturas, generarFactura
 } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
+import BadgeFactura from '../componentes/BadgeFactura';
+import ModalFacturarOrden from '../componentes/ModalFacturarOrden';
 import FormularioDiagnostico from '../componentes/FormularioDiagnostico';
 import { useAuth } from '../context/AuthContext';
 import './OrdenDetalle.css';
@@ -78,6 +80,7 @@ export default function OrdenDetalle() {
   const [modalCliente, setModalCliente] = useState(false);
   const [modalTotal, setModalTotal] = useState(false);
   const [modalPago, setModalPago] = useState(false);
+  const [modalFacturar, setModalFacturar] = useState(false);
   const [notaTexto, setNotaTexto] = useState('');
   const [notaAutor, setNotaAutor] = useState('');
 
@@ -333,7 +336,7 @@ export default function OrdenDetalle() {
 
   const porCancelar = Number(orden.total_orden) - Number(orden.abono);
   const esCancelada = orden.estado === 'cancelada' || orden.equipos?.some(e => e.estado === 'cancelada');
-  const facturaOrden = facturas.find(f => Number(f.orden_servicio_id) === Number(id));
+  const facturaOrden = orden.factura || facturas.find(f => Number(f.orden_servicio_id) === Number(id));
   const tieneFactura = Boolean(facturaOrden);
   const facturaAutorizada = Boolean(facturaOrden?.estado_sri === 'autorizado' && facturaOrden?.numero_autorizacion);
   const facturaAnulada = Boolean(facturaOrden && (facturaOrden.estado_sri === 'anulada' || facturaOrden.estado_sri === 'anulada_parcial'));
@@ -349,7 +352,10 @@ export default function OrdenDetalle() {
           <button className="boton-secundario" onClick={() => navigate('/ordenes')}><ArrowLeft size={18} /> Volver</button>
           <div>
             <h2>{orden.numero_orden}</h2>
-            <BadgeEstado estado={orden.equipos?.[0]?.estado || orden.estado} />
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <BadgeEstado estado={orden.equipos?.[0]?.estado || orden.estado} />
+              <BadgeFactura orden={{ ...orden, factura: facturaOrden }} mostrarNumero={true} />
+            </div>
           </div>
         </div>
         <div className="orden-detalle__header-acciones">
@@ -357,26 +363,22 @@ export default function OrdenDetalle() {
           <button className="boton-secundario" onClick={enviarWhatsapp} title="Enviar por WhatsApp" style={{ color: '#25D366' }}><MessageCircle size={18} /> WhatsApp</button>
           <button className="boton-secundario" onClick={convertirNotaVenta} title="Nota de Venta" disabled={esCancelada} style={esCancelada ? {opacity: 0.5, cursor: 'not-allowed'} : {}}><Receipt size={18} /> Nota Venta</button>
           
-{facturaAnulada ? (
-              <Link to="/facturacion" className="btn-card-accion" title={facturaOrden.estado_sri === 'anulada_parcial'
-                ? 'La factura fue anulada parcialmente con una nota de crédito'
-                : 'La factura fue anulada con una nota de crédito'}
-                style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
-                <Ban size={14} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
-              </Link>
-            ) : facturaAutorizada ? (
-              <Link to="/facturacion" className="btn-card-accion" title={`Autorización SRI: ${facturaOrden.numero_autorizacion}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)' }}>
-                <FileCheck2 size={14} /> Facturada ✓
-              </Link>
-            ) : tieneFactura ? (
-            <Link to="/facturacion" className="boton-secundario" style={{ color: 'var(--texto-secundario)' }}>
-              <FileCheck2 size={18} /> Estado Factura
+          {facturaAnulada ? (
+            <Link to="/facturacion" className="boton-secundario" title={facturaOrden.estado_sri === 'anulada_parcial'
+              ? 'La factura fue anulada parcialmente con una nota de crédito'
+              : 'La factura fue anulada con una nota de crédito'}
+              style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
+              <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
+            </Link>
+          ) : tieneFactura ? (
+            <Link to="/facturacion" className="boton-secundario" title={`Factura SRI: ${facturaOrden.numero_documento || ''} - Estado: ${facturaOrden.estado_sri}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)', backgroundColor: '#ecfdf5', fontWeight: 600 }}>
+              <FileCheck2 size={18} /> {facturaAutorizada ? 'Facturada ✓' : `Facturada (${facturaOrden.numero_documento || 'SRI'})`}
             </Link>
           ) : (
             <button
               className="boton-secundario"
               onClick={() => {
-                if (porCancelar <= 0) generarFacturaSRI();
+                if (porCancelar <= 0) setModalFacturar(true);
               }}
               title={porCancelar > 0 ? `Falta pagar $${porCancelar.toFixed(2)} para facturar` : 'Generar factura electrónica SRI'}
               style={{
@@ -447,26 +449,22 @@ export default function OrdenDetalle() {
           <h3><DollarSign size={18} /> Datos Financieros</h3>
           <div className="orden-detalle__card-acciones">
             {/* ─── Botón de Facturar (SRI) ─── */}
-{facturaAnulada ? (
-            <Link to="/facturacion" className="boton-secundario" title={facturaOrden.estado_sri === 'anulada_parcial'
-              ? 'La factura de esta orden fue anulada parcialmente con una nota de crédito'
-              : 'La factura de esta orden fue anulada con una nota de crédito'}
-              style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
-              <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
-            </Link>
-          ) : facturaAutorizada ? (
-              <Link to="/facturacion" className="btn-card-accion" title={`Autorización SRI: ${facturaOrden.numero_autorizacion}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)' }}>
-                <FileCheck2 size={14} /> Facturada ✓
+            {facturaAnulada ? (
+              <Link to="/facturacion" className="boton-secundario" title={facturaOrden.estado_sri === 'anulada_parcial'
+                ? 'La factura de esta orden fue anulada parcialmente con una nota de crédito'
+                : 'La factura de esta orden fue anulada con una nota de crédito'}
+                style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
+                <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
               </Link>
             ) : tieneFactura ? (
-              <Link to="/facturacion" className="btn-card-accion" style={{ color: 'var(--texto-secundario)' }}>
-                <FileCheck2 size={14} /> Estado Factura
+              <Link to="/facturacion" className="btn-card-accion" title={`Factura SRI: ${facturaOrden.numero_documento || ''} - Estado: ${facturaOrden.estado_sri}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)', backgroundColor: '#ecfdf5' }}>
+                <FileCheck2 size={14} /> {facturaAutorizada ? 'Facturada ✓' : `Facturada (${facturaOrden.numero_documento || 'SRI'})`}
               </Link>
             ) : (
               <button
                 className={`btn-card-accion ${porCancelar > 0 ? 'btn-card-accion--bloqueado' : 'btn-card-accion--facturar'}`}
                 onClick={() => {
-                  if (porCancelar <= 0) generarFacturaSRI();
+                  if (porCancelar <= 0) setModalFacturar(true);
                 }}
                 title={porCancelar > 0 ? `Falta pagar $${porCancelar.toFixed(2)} para facturar` : 'Generar factura electrónica SRI'}
                 disabled={porCancelar > 0}
@@ -1014,6 +1012,26 @@ export default function OrdenDetalle() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ═══ MODAL FACTURAR ORDEN (SRI) ═══ */}
+      {modalFacturar && (
+        <ModalFacturarOrden
+          orden={orden}
+          cliente={cliente}
+          onCerrar={() => setModalFacturar(false)}
+          onFacturaCreada={(nuevaFactura) => {
+            setModalFacturar(false);
+            setFacturas(prev => {
+              const filtradas = prev.filter(f => f.id !== nuevaFactura.id);
+              return [...filtradas, nuevaFactura];
+            });
+            setOrden(prev => ({
+              ...prev,
+              factura: nuevaFactura
+            }));
+          }}
+        />
       )}
     </div>
   );

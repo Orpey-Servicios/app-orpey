@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
 import { 
-  PieChart as PieChartIcon, Activity, DollarSign, Wrench, Wallet, Calendar, Filter, TrendingUp
+  PieChart as PieChartIcon, Activity, DollarSign, Wrench, Wallet, Calendar, Filter, TrendingUp, FileCheck2
 } from 'lucide-react';
 import { obtenerOrdenes } from '../api/orpey-api';
 import { 
@@ -88,6 +88,10 @@ export default function Resumen() {
     let porCobrar = 0;
     let ordenesExitosas = 0;
     let ordenesCanceladas = 0;
+    let montoFacturado = 0;
+    let ordenesFacturadas = 0;
+    let montoPorFacturar = 0;
+    let ordenesPorFacturar = 0;
 
     ordenesFiltradas.forEach(o => {
       if (o.estado === 'cancelada') {
@@ -97,17 +101,65 @@ export default function Resumen() {
       
       const total = Number(o.total_orden) || 0;
       const abono = Number(o.abono) || 0;
+      const saldo = total - abono;
       
       if (['terminada', 'entregada'].includes(o.estado)) {
         ingresosTotales += total;
         ordenesExitosas++;
       } else {
         abonosTotales += abono;
-        porCobrar += (total - abono);
+        porCobrar += saldo;
+      }
+
+      // Facturación electrónica SRI
+      const tieneFactura = !!o.factura && o.factura.estado_sri !== 'anulada';
+      if (tieneFactura) {
+        montoFacturado += total;
+        ordenesFacturadas++;
+      } else if (['terminada', 'entregada'].includes(o.estado) && saldo <= 0) {
+        montoPorFacturar += total;
+        ordenesPorFacturar++;
       }
     });
 
-    return { ingresosTotales, abonosTotales, porCobrar, ordenesExitosas, ordenesCanceladas, totalOrdenes: ordenesFiltradas.length };
+    return { 
+      ingresosTotales, 
+      abonosTotales, 
+      porCobrar, 
+      ordenesExitosas, 
+      ordenesCanceladas, 
+      totalOrdenes: ordenesFiltradas.length,
+      montoFacturado,
+      ordenesFacturadas,
+      montoPorFacturar,
+      ordenesPorFacturar
+    };
+  }, [ordenesFiltradas]);
+
+  // DATOS FACTURACIÓN SRI
+  const datosFacturacion = useMemo(() => {
+    let facturadas = 0;
+    let porFacturar = 0;
+    let sinFacturar = 0;
+
+    ordenesFiltradas.forEach(o => {
+      if (o.estado === 'cancelada') return;
+      const porCancelar = Number(o.total_orden || 0) - Number(o.abono || 0);
+      const tieneFactura = !!o.factura && o.factura.estado_sri !== 'anulada';
+      if (tieneFactura) {
+        facturadas++;
+      } else if (['terminada', 'entregada'].includes(o.estado) && porCancelar <= 0) {
+        porFacturar++;
+      } else {
+        sinFacturar++;
+      }
+    });
+
+    return [
+      { name: 'Facturadas (SRI)', value: facturadas, color: '#10B981' },
+      { name: 'Por Facturar', value: porFacturar, color: '#F59E0B' },
+      { name: 'En Proceso', value: sinFacturar, color: '#3B82F6' },
+    ].filter(d => d.value > 0);
   }, [ordenesFiltradas]);
 
   // DATOS PARA GRAFICOS
@@ -207,6 +259,20 @@ export default function Resumen() {
           <div className="resumen-tarjeta__info">
             <span className="resumen-tarjeta__valor">${metricas.ingresosTotales.toFixed(2)}</span>
             <span className="resumen-tarjeta__titulo">Facturación Trabajos Terminados</span>
+          </div>
+        </div>
+        <div className="resumen-tarjeta">
+          <div className="resumen-tarjeta__icono" style={{ background: '#ECFDF5', color: '#059669' }}><FileCheck2 size={24} /></div>
+          <div className="resumen-tarjeta__info">
+            <span className="resumen-tarjeta__valor">${metricas.montoFacturado.toFixed(2)}</span>
+            <span className="resumen-tarjeta__titulo">Facturación SRI Emitida ({metricas.ordenesFacturadas})</span>
+          </div>
+        </div>
+        <div className="resumen-tarjeta">
+          <div className="resumen-tarjeta__icono" style={{ background: '#FEFCE8', color: '#D97706' }}><Activity size={24} /></div>
+          <div className="resumen-tarjeta__info">
+            <span className="resumen-tarjeta__valor">${metricas.montoPorFacturar.toFixed(2)}</span>
+            <span className="resumen-tarjeta__titulo">Por Facturar ({metricas.ordenesPorFacturar})</span>
           </div>
         </div>
         <div className="resumen-tarjeta">
@@ -332,6 +398,34 @@ export default function Resumen() {
                 </BarChart>
               </ResponsiveContainer>
             ) : <p style={{textAlign: 'center', color: 'var(--texto-secundario)', paddingTop: '100px'}}>No hay datos</p>}
+          </div>
+        </div>
+
+        <div className="chart-container">
+          <h3><FileCheck2 size={18} /> Estado de Facturación SRI</h3>
+          <div className="chart-wrapper">
+            {datosFacturacion.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={datosFacturacion}
+                    cx="50%" cy="50%"
+                    innerRadius={55}
+                    outerRadius={95}
+                    paddingAngle={5}
+                    dataKey="value"
+                    label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {datosFacturacion.map((entry, index) => (
+                      <Cell key={`cell-fac-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <RechartsTooltip 
+                    contentStyle={{ background: 'var(--fondo-principal)', border: '1px solid var(--borde-color)', borderRadius: '8px' }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <p style={{textAlign: 'center', color: 'var(--texto-secundario)', paddingTop: '100px'}}>No hay órdenes en este periodo</p>}
           </div>
         </div>
       </div>

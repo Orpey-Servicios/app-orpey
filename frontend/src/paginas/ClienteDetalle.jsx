@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Plus, MessageCircle, Mail, ClipboardList } from 'lucide-react';
 import { obtenerCliente, obtenerOrdenes } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
+import BadgeFactura from '../componentes/BadgeFactura';
 import './ClienteDetalle.css';
 
 const tipoEquipoTexto = { pc_escritorio: 'PC', laptop: 'Laptop', impresora: 'Impresora', telefono: 'Teléfono', otro: 'Otro' };
@@ -105,7 +106,12 @@ export default function ClienteDetalle() {
                 <tr key={o.id} onClick={() => navigate(`/ordenes/${o.id}`)} className="tabla__fila-click">
                   <td><strong>{o.numero_orden}</strong></td>
                   <td>{tipoEquipoTexto[o.tipo_equipo] || o.tipo_equipo} {o.marca || ''}</td>
-                  <td><BadgeEstado estado={o.estado} /></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                      <BadgeEstado estado={o.estado} />
+                      <BadgeFactura orden={o} />
+                    </div>
+                  </td>
                   <td>${Number(o.total_orden).toFixed(2)}</td>
                   <td>{new Date(o.fecha_ingreso).toLocaleDateString('es-EC')}</td>
                 </tr>

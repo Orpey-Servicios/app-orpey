@@ -312,6 +312,25 @@ class OrdenResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FacturaResumen(BaseModel):
+    """Resumen de factura asociada a una orden de servicio"""
+    id: int
+    numero_documento: str
+    clave_acceso: str
+    estado_sri: str
+    ambiente: str = "1"
+    fecha_emision: Optional[datetime] = None
+    fecha_autorizacion: Optional[datetime] = None
+    numero_autorizacion: Optional[str] = None
+    subtotal: Decimal
+    iva: Decimal
+    total: Decimal
+    email_enviado: bool = False
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class OrdenDetalleResponse(BaseModel):
     """Respuesta del detalle de orden con desglose financiero por equipo"""
     id: int
@@ -329,6 +348,9 @@ class OrdenDetalleResponse(BaseModel):
     fecha_cierre: Optional[datetime]
     created_at: datetime
     equipos: list[EquipoDetalleResponse] = []
+    factura: Optional[FacturaResumen] = None
+
+    model_config = {"from_attributes": True}
 
 
 class OrdenConCliente(BaseModel):
@@ -344,6 +366,7 @@ class OrdenConCliente(BaseModel):
     cliente: ClienteResponse
     tecnico: Optional[TecnicoResponse] = None
     equipos: list[EquipoResponse] = []
+    factura: Optional[FacturaResumen] = None
 
     model_config = {"from_attributes": True}
 

@@ -162,6 +162,7 @@ async def listar_ordenes(
     estado: Optional[str] = Query(None, description="Filtrar por estado: revision, en_reparacion, esperando_repuesto, terminada, entregada, no_hubo_solucion"),
     cliente_id: Optional[int] = Query(None, description="Filtrar por cliente"),
     tipo_equipo: Optional[str] = Query(None, description="Filtrar por tipo: pc_escritorio, laptop, impresora, telefono"),
+    facturada: Optional[bool] = Query(None, description="Filtrar por orden facturada (true) o sin facturar (false)"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -171,11 +172,13 @@ async def listar_ordenes(
     - /api/ordenes?estado=en_reparacion → Solo órdenes en reparación
     - /api/ordenes?cliente_id=1 → Solo órdenes del cliente 1
     - /api/ordenes?tipo_equipo=impresora → Solo impresoras
+    - /api/ordenes?facturada=true → Solo órdenes ya facturadas
     """
     query = select(OrdenServicio).options(
         joinedload(OrdenServicio.cliente),
         joinedload(OrdenServicio.tecnico),
-        joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos)
+        joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos),
+        joinedload(OrdenServicio.factura)
     )
 
     if estado:
@@ -184,6 +187,10 @@ async def listar_ordenes(
         query = query.where(OrdenServicio.cliente_id == cliente_id)
     if tipo_equipo:
         query = query.join(EquipoOrden).where(EquipoOrden.tipo_equipo == TipoEquipo(tipo_equipo))
+    if facturada is True:
+        query = query.where(OrdenServicio.factura.has())
+    elif facturada is False:
+        query = query.where(~OrdenServicio.factura.has())
 
     query = query.order_by(OrdenServicio.id.desc())  # Más recientes primero
     result = await db.execute(query)
@@ -240,7 +247,8 @@ async def obtener_orden(
         .options(
             joinedload(OrdenServicio.equipos).selectinload(EquipoOrden.repuestos),
             joinedload(OrdenServicio.cliente),
-            joinedload(OrdenServicio.tecnico)
+            joinedload(OrdenServicio.tecnico),
+            joinedload(OrdenServicio.factura)
         )
         .where(OrdenServicio.id == orden_id)
     )

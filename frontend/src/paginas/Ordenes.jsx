@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Filter, Search, ClipboardList } from 'lucide-react';
 import { obtenerOrdenes } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
+import BadgeFactura from '../componentes/BadgeFactura';
 import './Ordenes.css';
 
 // Opciones de filtro de estado
@@ -35,6 +36,13 @@ const TIPOS_EQUIPO = [
   { valor: 'otro', etiqueta: 'Otro' },
 ];
 
+const FILTROS_FACTURA = [
+  { valor: '', etiqueta: 'Facturación: Todas' },
+  { valor: 'facturada', etiqueta: '🧾 Facturadas' },
+  { valor: 'por_facturar', etiqueta: '⏳ Por facturar' },
+  { valor: 'no_facturada', etiqueta: 'Sin facturar' },
+];
+
 const tipoEquipoTexto = {
   pc_escritorio: 'PC', laptop: 'Laptop', impresora: 'Impresora', telefono: 'Teléfono', otro: 'Otro'
 };
@@ -44,6 +52,7 @@ export default function Ordenes() {
   const [cargando, setCargando] = useState(true);
   const [filtroEstado, setFiltroEstado] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('');
+  const [filtroFactura, setFiltroFactura] = useState('');
   const [busqueda, setBusqueda] = useState('');
   const navigate = useNavigate();
 
@@ -67,12 +76,24 @@ export default function Ordenes() {
     }
   }
 
-  // Filtrar por búsqueda local (número de orden o marca)
+  // Filtrar por búsqueda local y estado de facturación
   const ordenesFiltradas = ordenes.filter(o => {
+    if (filtroFactura === 'facturada') {
+      const tieneFactura = !!o.factura && o.factura.estado_sri !== 'anulada';
+      if (!tieneFactura) return false;
+    } else if (filtroFactura === 'por_facturar') {
+      const porCancelar = Number(o.total_orden) - Number(o.abono);
+      const facturable = ['terminada', 'entregada'].includes(o.estado) && porCancelar <= 0 && o.estado !== 'cancelada';
+      if (!facturable || o.factura) return false;
+    } else if (filtroFactura === 'no_facturada') {
+      if (o.factura) return false;
+    }
+
     if (!busqueda) return true;
     const texto = busqueda.toLowerCase();
     return (
       (o.numero_orden || '').toLowerCase().includes(texto) ||
+      (o.factura?.numero_documento || '').toLowerCase().includes(texto) ||
       (o.equipos?.some(e => (e.marca || '').toLowerCase().includes(texto) || (e.modelo || '').toLowerCase().includes(texto))) ||
       (o.cliente?.nombre || '').toLowerCase().includes(texto) ||
       (o.cliente?.apellido || '').toLowerCase().includes(texto)
@@ -89,7 +110,7 @@ export default function Ordenes() {
             <Search size={16} className="filtro-buscador__icono" />
             <input
               type="text"
-              placeholder="Buscar por N° orden, cliente, marca..."
+              placeholder="Buscar por N° orden, factura, cliente, marca..."
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
               className="campo-texto filtro-buscador__input"
@@ -103,6 +124,10 @@ export default function Ordenes() {
           {/* Filtro por tipo de equipo */}
           <select value={filtroTipo} onChange={(e) => setFiltroTipo(e.target.value)} className="campo-texto filtro-select" id="filtro-tipo">
             {TIPOS_EQUIPO.map(t => <option key={t.valor} value={t.valor}>{t.etiqueta}</option>)}
+          </select>
+          {/* Filtro por facturación */}
+          <select value={filtroFactura} onChange={(e) => setFiltroFactura(e.target.value)} className="campo-texto filtro-select" id="filtro-factura">
+            {FILTROS_FACTURA.map(f => <option key={f.valor} value={f.valor}>{f.etiqueta}</option>)}
           </select>
         </div>
         <button className="boton-primario" onClick={() => navigate('/ordenes/nueva')} id="btn-nueva-orden">
@@ -160,6 +185,7 @@ export default function Ordenes() {
                               : <BadgeEstado estado={orden.estado} />
                             )
                         }
+                        <BadgeFactura orden={orden} />
                       </div>
                     </td>
                     <td>${Number(orden.total_orden).toFixed(2)}</td>

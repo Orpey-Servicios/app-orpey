@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { obtenerDashboard, obtenerOrdenes, obtenerResumenCaja } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
+import BadgeFactura from '../componentes/BadgeFactura';
 import './Dashboard.css';
 
 export default function Dashboard() {
@@ -247,6 +248,7 @@ export default function Dashboard() {
                               : <BadgeEstado estado={orden.estado} />
                             )
                         }
+                        <BadgeFactura orden={orden} />
                       </div>
                     </td>
                     <td>${Number(orden.total_orden).toFixed(2)}</td>
