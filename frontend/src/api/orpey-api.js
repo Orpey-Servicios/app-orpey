@@ -791,12 +791,21 @@ export async function anularFactura(facturaId, datos) {
 }
 
 /**
- * Descargar el PDF de una factura electrónica.
- * Abre el PDF en una nueva pestaña del navegador.
+ * Descargar o visualizar el PDF de una factura electrónica (RIDE).
+ * @param {number} facturaId - ID de la factura
+ * @param {boolean} inline - Si true, visualiza directamente en el navegador en lugar de descargar
+ */
+export function descargarPdfFactura(facturaId, inline = false) {
+  const query = inline ? '?inline=true' : '';
+  window.open(`${URL_BASE}/api/facturacion/${facturaId}/pdf${query}`, '_blank');
+}
+
+/**
+ * Imprimir la factura electrónica abriendo el RIDE PDF en el visor del navegador.
  * @param {number} facturaId - ID de la factura
  */
-export function descargarPdfFactura(facturaId) {
-  window.open(`${URL_BASE}/api/facturacion/${facturaId}/pdf`, '_blank');
+export function imprimirFactura(facturaId) {
+  descargarPdfFactura(facturaId, true);
 }
 
 /**

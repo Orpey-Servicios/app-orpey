@@ -12,18 +12,19 @@ import {
   ArrowLeft, Edit, FileDown, MessageCircle, Receipt,
   Trash2, User, Wrench, Calendar, Shield, Save, X, DollarSign,
   Plus, Clock, MessageSquare, UserCheck, CreditCard, ListChecks,
-  Pencil, History, FileCheck2, Ban, RotateCcw
+  Pencil, History, FileCheck2, Ban, RotateCcw, Eye, Printer
 } from 'lucide-react';
 import {
   obtenerOrden, obtenerCliente, obtenerTecnico, actualizarEquipo,
   eliminarOrden, descargarPdfOrden, obtenerWhatsappOrden, crearNotaVenta,
   actualizarCliente, actualizarOrden,
   registrarPago, obtenerPagos, agregarNota, obtenerNotas, obtenerTecnicos,
-  obtenerFacturas, generarFactura
+  obtenerFacturas, generarFactura, imprimirFactura
 } from '../api/orpey-api';
 import BadgeEstado from '../componentes/BadgeEstado';
 import BadgeFactura from '../componentes/BadgeFactura';
 import ModalFacturarOrden from '../componentes/ModalFacturarOrden';
+import ModalVisualizarFactura from '../componentes/ModalVisualizarFactura';
 import FormularioDiagnostico from '../componentes/FormularioDiagnostico';
 import { useAuth } from '../context/AuthContext';
 import './OrdenDetalle.css';
@@ -81,6 +82,7 @@ export default function OrdenDetalle() {
   const [modalTotal, setModalTotal] = useState(false);
   const [modalPago, setModalPago] = useState(false);
   const [modalFacturar, setModalFacturar] = useState(false);
+  const [modalVerFactura, setModalVerFactura] = useState(false);
   const [notaTexto, setNotaTexto] = useState('');
   const [notaAutor, setNotaAutor] = useState('');
 
@@ -354,7 +356,7 @@ export default function OrdenDetalle() {
             <h2>{orden.numero_orden}</h2>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               <BadgeEstado estado={orden.equipos?.[0]?.estado || orden.estado} />
-              <BadgeFactura orden={{ ...orden, factura: facturaOrden }} mostrarNumero={true} />
+              <BadgeFactura orden={{ ...orden, factura: facturaOrden }} mostrarNumero={false} />
             </div>
           </div>
         </div>
@@ -368,12 +370,27 @@ export default function OrdenDetalle() {
               ? 'La factura fue anulada parcialmente con una nota de crédito'
               : 'La factura fue anulada con una nota de crédito'}
               style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
-              <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
+              <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Factura Anulada Parcial' : 'Factura Anulada'}
             </Link>
           ) : tieneFactura ? (
-            <Link to="/facturacion" className="boton-secundario" title={`Factura SRI: ${facturaOrden.numero_documento || ''} - Estado: ${facturaOrden.estado_sri}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)', backgroundColor: '#ecfdf5', fontWeight: 600 }}>
-              <FileCheck2 size={18} /> {facturaAutorizada ? 'Facturada ✓' : `Facturada (${facturaOrden.numero_documento || 'SRI'})`}
-            </Link>
+            <>
+              <button
+                className="boton-secundario"
+                onClick={() => setModalVerFactura(true)}
+                title="Visualizar comprobante y datos fiscales de la factura SRI"
+                style={{ color: '#047857', borderColor: '#a7f3d0', backgroundColor: '#ecfdf5', fontWeight: 600 }}
+              >
+                <Eye size={18} /> Visualizar
+              </button>
+              <button
+                className="boton-secundario"
+                onClick={() => imprimirFactura(facturaOrden.id)}
+                title="Imprimir factura electrónica SRI (RIDE PDF)"
+                style={{ color: '#1d4ed8', borderColor: '#bfdbfe', backgroundColor: '#eff6ff', fontWeight: 600 }}
+              >
+                <Printer size={18} /> Imprimir
+              </button>
+            </>
           ) : (
             <button
               className="boton-secundario"
@@ -448,18 +465,33 @@ export default function OrdenDetalle() {
         <div className="orden-detalle__card-header">
           <h3><DollarSign size={18} /> Datos Financieros</h3>
           <div className="orden-detalle__card-acciones">
-            {/* ─── Botón de Facturar (SRI) ─── */}
+            {/* ─── Acciones de Facturación (SRI) ─── */}
             {facturaAnulada ? (
               <Link to="/facturacion" className="boton-secundario" title={facturaOrden.estado_sri === 'anulada_parcial'
                 ? 'La factura de esta orden fue anulada parcialmente con una nota de crédito'
                 : 'La factura de esta orden fue anulada con una nota de crédito'}
                 style={{ color: '#7C3AED', borderColor: '#C4B5FD', backgroundColor: '#F5F3FF' }}>
-                <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Facturada · Anulada Parcial' : 'Facturada · Anulada'}
+                <Ban size={18} /> {facturaOrden.estado_sri === 'anulada_parcial' ? 'Factura Anulada Parcial' : 'Factura Anulada'}
               </Link>
             ) : tieneFactura ? (
-              <Link to="/facturacion" className="btn-card-accion" title={`Factura SRI: ${facturaOrden.numero_documento || ''} - Estado: ${facturaOrden.estado_sri}`} style={{ color: 'var(--color-exito)', borderColor: 'var(--color-exito)', backgroundColor: '#ecfdf5' }}>
-                <FileCheck2 size={14} /> {facturaAutorizada ? 'Facturada ✓' : `Facturada (${facturaOrden.numero_documento || 'SRI'})`}
-              </Link>
+              <div style={{ display: 'inline-flex', gap: '6px' }}>
+                <button
+                  className="btn-card-accion"
+                  onClick={() => setModalVerFactura(true)}
+                  title="Visualizar factura electrónica SRI"
+                  style={{ color: '#047857', borderColor: '#a7f3d0', backgroundColor: '#ecfdf5', fontWeight: 600 }}
+                >
+                  <Eye size={14} /> Visualizar
+                </button>
+                <button
+                  className="btn-card-accion"
+                  onClick={() => imprimirFactura(facturaOrden.id)}
+                  title="Imprimir RIDE (PDF) de la factura"
+                  style={{ color: '#1d4ed8', borderColor: '#bfdbfe', backgroundColor: '#eff6ff', fontWeight: 600 }}
+                >
+                  <Printer size={14} /> Imprimir
+                </button>
+              </div>
             ) : (
               <button
                 className={`btn-card-accion ${porCancelar > 0 ? 'btn-card-accion--bloqueado' : 'btn-card-accion--facturar'}`}
@@ -1031,6 +1063,16 @@ export default function OrdenDetalle() {
               factura: nuevaFactura
             }));
           }}
+        />
+      )}
+
+      {/* ═══ MODAL VISUALIZAR FACTURA (SRI) ═══ */}
+      {modalVerFactura && facturaOrden && (
+        <ModalVisualizarFactura
+          factura={facturaOrden}
+          cliente={cliente}
+          orden={orden}
+          onCerrar={() => setModalVerFactura(false)}
         />
       )}
     </div>

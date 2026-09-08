@@ -734,7 +734,7 @@ async def descargar_xml(factura_id: int, db: AsyncSession = Depends(get_db)):
         "datos del emisor, cliente, detalle, IVA, total y número de autorización."
     ),
 )
-async def descargar_pdf(factura_id: int, db: AsyncSession = Depends(get_db)):
+async def descargar_pdf(factura_id: int, inline: bool = Query(False), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(FacturaElectronica).where(FacturaElectronica.id == factura_id)
     )
@@ -761,11 +761,12 @@ async def descargar_pdf(factura_id: int, db: AsyncSession = Depends(get_db)):
             equipos = orden.equipos
 
     pdf_bytes = _generar_pdf_factura(factura, cliente, equipos)
+    disposition = "inline" if inline else "attachment"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f'attachment; filename="{factura.clave_acceso}.pdf"'
+            "Content-Disposition": f'{disposition}; filename="{factura.clave_acceso}.pdf"'
         },
     )
 
