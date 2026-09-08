@@ -176,7 +176,11 @@ export default function Facturas() {
         alert(`Factura transmitida. Estado: ${ESTADOS_SRI[resultado?.estado_sri]?.label || resultado?.estado_sri || 'recibida'}`);
       }
     } catch (err) {
-      alert(err.message || 'No se pudo transmitir la factura al SRI.');
+      if (err.message && (err.message.includes('403') || err.message.includes('administradores') || err.message.includes('Forbidden'))) {
+        alert('Permiso denegado: Solo administradores pueden transmitir en producción al SRI. Vuelve a iniciar sesión con tu cuenta de administrador si acabas de recibir el rol.');
+      } else {
+        alert(err.message || 'No se pudo transmitir la factura al SRI.');
+      }
     } finally {
       setTransmitiendo(prev => {
         const copia = new Set(prev);
@@ -208,7 +212,11 @@ export default function Facturas() {
         }
       }
     } catch (err) {
-      alert(err.message || 'No se pudo consultar la autorización al SRI.');
+      if (err.message && (err.message.includes('403') || err.message.includes('administradores') || err.message.includes('Forbidden'))) {
+        alert('Permiso denegado: Solo administradores pueden consultar el estado ante el SRI. Vuelve a iniciar sesión con tu cuenta de administrador si acabas de recibir el rol.');
+      } else {
+        alert(err.message || 'No se pudo consultar la autorización al SRI.');
+      }
     } finally {
       setRefrescando(prev => {
         const copia = new Set(prev);

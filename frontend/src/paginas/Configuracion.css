@@ -295,3 +295,49 @@ body.dark-theme .configuracion__logo-preview {
   color: var(--color-error);
   background-color: rgba(220, 53, 69, 0.1);
 }
+
+/* Firma Electrónica SRI */
+.badge-firma {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge-firma--vigente {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+.badge-firma--inactivo {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+.firma-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 16px;
+  background-color: var(--fondo-principal);
+  border-radius: 8px;
+  border: 1px solid var(--borde-color);
+}
+.firma-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.firma-info-label {
+  font-size: 11px;
+  color: var(--texto-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.firma-info-valor {
+  font-size: 14px;
+  color: var(--texto-principal);
+  word-break: break-word;
+}
+

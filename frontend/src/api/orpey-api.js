@@ -41,10 +41,10 @@ const URL_BASE = '';
 async function hacerPeticion(endpoint, opciones = {}) {
   try {
     // Construir las opciones de la petición
-    const headers = {
-      'Content-Type': 'application/json',
-      ...opciones.headers,
-    };
+    const headers = { ...opciones.headers };
+    if (!(opciones.body instanceof FormData)) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    }
 
     // Incluir token JWT automáticamente si existe
     const token = localStorage.getItem('token');
@@ -57,10 +57,9 @@ async function hacerPeticion(endpoint, opciones = {}) {
       headers,
     };
 
-    // Si hay un cuerpo (body), convertirlo a texto JSON
-    // body se usa en POST y PUT para enviar datos
+    // Si hay un cuerpo (body), convertirlo a texto JSON si no es FormData
     if (opciones.body) {
-      config.body = JSON.stringify(opciones.body);
+      config.body = opciones.body instanceof FormData ? opciones.body : JSON.stringify(opciones.body);
     }
 
     // Hacer la petición HTTP
@@ -799,6 +798,27 @@ export async function consultarAutorizacion(facturaId) {
     method: 'POST',
   });
 }
+
+/**
+ * Obtener información y vigencia de la firma electrónica SRI (.p12).
+ * @returns {Promise<Object>}
+ */
+export async function obtenerInfoFirma() {
+  return await hacerPeticion('/api/facturacion/firma/info');
+}
+
+/**
+ * Subir certificado digital .p12 para facturación SRI.
+ * @param {FormData} formData - FormData con 'archivo' y 'password'
+ * @returns {Promise<Object>}
+ */
+export async function subirFirmaP12(formData) {
+  return await hacerPeticion('/api/facturacion/firma/upload', {
+    method: 'POST',
+    body: formData,
+  });
+}
+
 
 /* ============================================================
    CATÁLOGO DE SERVICIOS
