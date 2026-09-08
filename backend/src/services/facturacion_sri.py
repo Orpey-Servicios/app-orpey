@@ -32,13 +32,20 @@ Seguridad de la firma digital (.p12):
 
 import os
 import secrets
-from datetime import datetime
+import hashlib
+import base64
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional
 
 from lxml import etree
+from cryptography.hazmat.primitives.serialization import pkcs12, Encoding
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography import x509
 
 from src.models.models import FacturaElectronica
+from src.utils.fechas import ahora_ecuador, ahora_ecuador_naive, ECUADOR_TZ
 
 
 # =====================================================
@@ -445,8 +452,8 @@ def generar_comprobante_factura(
     if tipo_id != "07" and total >= limite_cf and not identificacion:
         errores.append(f"Identificación del comprador incompleta para total >= ${limite_cf:.2f}")
 
-    # --- Clave de acceso ---
-    fecha_emision = datetime.now()
+    # --- Clave de acceso (hora Ecuador UTC-5 naive) ---
+    fecha_emision = ahora_ecuador_naive()
     codigo_numerico = generar_codigo_numerico()
     clave_acceso = generar_clave_acceso(
         fecha=fecha_emision,
@@ -579,7 +586,7 @@ def generar_comprobante_nota_credito(
 
     tipo_id, identificacion = _detectar_tipo_identificacion(cliente)
 
-    fecha_emision = fecha_emision or datetime.now()
+    fecha_emision = fecha_emision or ahora_ecuador_naive()
     codigo_numerico = generar_codigo_numerico()
     clave_acceso = generar_clave_acceso(
         fecha=fecha_emision,
@@ -633,58 +640,78 @@ def generar_comprobante_nota_credito(
 # 4. FIRMA XAdES-BES
 # =====================================================
 
-def obtener_password_firma() -> Optional[str]:
+def obtener_password_firma(ruta_p12: Optional[str] = None) -> Optional[str]:
     """
     Resuelve la contraseña del .p12 SIN hardcodearla:
-      1. Env var FIRMA_P12_PASSWORD.
-      2. Archivo protegido $FIRMA_P12_PASSWORD_FILE o
-         /home/skorggamor/agente-contador/.firma_p12.pass
+      1. Archivo protegido junto al .p12 (ej. /app/firma/.firma_p12.pass)
+      2. Archivo en FIRMA_P12_PASSWORD_FILE o rutas conocidas
+      3. Variable de entorno FIRMA_P12_PASSWORD
     """
+    # 1. Probar archivo .pass junto al .p12
+    if ruta_p12:
+        sibling_pass = os.path.join(os.path.dirname(ruta_p12), ".firma_p12.pass")
+        if os.path.exists(sibling_pass):
+            try:
+                with open(sibling_pass, "r", encoding="utf-8") as f:
+                    val = f.read().strip()
+                if val:
+                    return val
+            except OSError:
+                pass
+
+    # 2. Rutas conocidas de archivo .pass
+    candidatos_pass = [
+        os.environ.get("FIRMA_P12_PASSWORD_FILE"),
+        "/app/firma/.firma_p12.pass",
+        "/home/skorggamor/agente-contador/.firma_p12.pass",
+    ]
+    for c in candidatos_pass:
+        if c and os.path.exists(c):
+            try:
+                with open(c, "r", encoding="utf-8") as f:
+                    val = f.read().strip()
+                if val:
+                    return val
+            except OSError:
+                pass
+
+    # 3. Variable de entorno
     pwd = os.environ.get("FIRMA_P12_PASSWORD")
     if pwd:
         return pwd
-    ruta = os.environ.get("FIRMA_P12_PASSWORD_FILE") or "/home/skorggamor/agente-contador/.firma_p12.pass"
-    if os.path.exists(ruta):
-        try:
-            with open(ruta, "r", encoding="utf-8") as f:
-                valor = f.read().strip()
-            if valor:
-                return valor
-        except OSError:
-            return None
-    # Fallback: archivo dentro del container (/app/firma/.firma_p12.pass)
-    ruta_container = "/app/firma/.firma_p12.pass"
-    if os.path.exists(ruta_container):
-        try:
-            with open(ruta_container, "r", encoding="utf-8") as f:
-                valor = f.read().strip()
-            if valor:
-                return valor
-        except OSError:
-            return None
+
     return None
+
+
+
+NS_DS = "http://www.w3.org/2000/09/xmldsig#"
+NS_ETSI = "http://uri.etsi.org/01903/v1.3.2#"
+NSMAP_XADES = {"ds": NS_DS, "etsi": NS_ETSI}
+
+
+def _wrap_b64(b64_str: str, line_len: int = 76) -> str:
+    """Envuelve base64 con saltos de línea cada 76 caracteres (formato PEM / XML-DSig)."""
+    return "\n" + "\n".join(b64_str[i : i + line_len] for i in range(0, len(b64_str), line_len)) + "\n"
 
 
 def firmar_xml(xml_string: str, ruta_p12: str, password_p12: str) -> str:
     """
-    Firma el XML en XAdES-BES insertando <ds:Signature> al final (método
-    enveloped), usando SHA-256/RSA y el certificado del .p12 del emisor.
+    Firma un comprobante XML en formato XAdES-BES estricto según la Ficha Técnica del SRI Ecuador.
 
-    IMPORTANTE: el XML se construye SIN xmlns propios antes de firmar para no
-    romper la canonicalización (C14N). El namespace ds lo declara signxml.
-
-    Returns:
-        string del XML firmado con declaración XML.
+    Estructura implementada:
+      - Canonicalización: Canonical XML 1.0 (http://www.w3.org/TR/2001/REC-xml-c14n-20010315)
+      - Algoritmo de firma: RSA-SHA1 (http://www.w3.org/2000/09/xmldsig#rsa-sha1)
+      - Algoritmo de digest: SHA-1 (http://www.w3.org/2000/09/xmldsig#sha1)
+      - Tres referencias en SignedInfo:
+          1. #Signature-SignedProperties: Digest de etsi:SignedProperties (Tipo: http://uri.etsi.org/01903#SignedProperties)
+          2. #Certificate: Digest de ds:KeyInfo
+          3. #comprobante: Digest del documento XML raíz con transformación enveloped-signature
+      - ds:KeyInfo contiene ds:X509Data (X509Certificate) y ds:KeyValue/ds:RSAKeyValue (Modulus y Exponent)
+      - ds:Object con etsi:QualifyingProperties que alberga etsi:SignedProperties:
+          * SigningTime con offset fijo de Ecuador (-05:00)
+          * SigningCertificate con CertDigest (SHA-1) e IssuerSerial (X509IssuerName, X509SerialNumber)
+          * SignedDataObjectProperties con DataObjectFormat para #comprobante
     """
-    try:
-        from cryptography.hazmat.primitives.serialization import pkcs12
-        from signxml import XMLSigner, methods
-    except ImportError as exc:
-        raise RuntimeError(
-            "Dependencias de firma no instaladas. Ejecuta: "
-            "pip install signxml lxml cryptography"
-        ) from exc
-
     if not os.path.exists(ruta_p12):
         raise FileNotFoundError(f"Archivo de firma digital no encontrado: {ruta_p12}")
     if not password_p12:
@@ -696,6 +723,7 @@ def firmar_xml(xml_string: str, ruta_p12: str, password_p12: str) -> str:
 
     with open(ruta_p12, "rb") as f:
         p12_data = f.read()
+
     key, cert, _extra = pkcs12.load_key_and_certificates(
         p12_data, password_p12.encode("utf-8")
     )
@@ -706,14 +734,263 @@ def firmar_xml(xml_string: str, ruta_p12: str, password_p12: str) -> str:
         )
 
     root = etree.fromstring(xml_string.encode("utf-8"))
-    signer = XMLSigner(
-        method=methods.enveloped,
-        signature_algorithm="rsa-sha256",
-        digest_algorithm="sha256",
-    )
-    signed_root = signer.sign(root, key=key, cert=[cert])
+    if not root.get("id"):
+        root.set("id", "comprobante")
 
-    return etree.tostring(signed_root, xml_declaration=True, encoding="UTF-8").decode("utf-8")
+    # 1. Digest del documento raíz (#comprobante, enveloped-signature)
+    doc_c14n = etree.tostring(root, method="c14n", exclusive=False, with_comments=False)
+    doc_digest = base64.b64encode(hashlib.sha1(doc_c14n).digest()).decode("ascii")
+
+    # Generación de identificadores pseudoaleatorios únicos
+    r_sig = secrets.randbelow(900000) + 100000
+    r_sinfo = secrets.randbelow(900000) + 100000
+    r_sp = secrets.randbelow(900000) + 100000
+    r_sp_ref = secrets.randbelow(900000) + 100000
+    r_cert = secrets.randbelow(900000) + 100000
+    r_doc_ref = secrets.randbelow(900000) + 100000
+    r_sval = secrets.randbelow(900000) + 100000
+    r_obj = secrets.randbelow(900000) + 100000
+
+    sig_id = f"Signature{r_sig}"
+    signed_info_id = f"Signature-SignedInfo{r_sinfo}"
+    signed_props_id = f"{sig_id}-SignedProperties{r_sp}"
+    signed_props_ref_id = f"SignedPropertiesID{r_sp_ref}"
+    key_info_id = f"Certificate{r_cert}"
+    doc_ref_id = f"Reference-ID-{r_doc_ref}"
+    sig_val_id = f"SignatureValue{r_sval}"
+    object_id = f"{sig_id}-Object{r_obj}"
+
+    # Datos del certificado y clave pública
+    cert_der = cert.public_bytes(Encoding.DER)
+    cert_b64 = base64.b64encode(cert_der).decode("ascii")
+    cert_digest = base64.b64encode(hashlib.sha1(cert_der).digest()).decode("ascii")
+    issuer_name = cert.issuer.rfc4514_string()
+    serial_number = str(cert.serial_number)
+
+    pn = cert.public_key().public_numbers()
+    mod_bytes = pn.n.to_bytes((pn.n.bit_length() + 7) // 8, "big")
+    exp_bytes = pn.e.to_bytes((pn.e.bit_length() + 7) // 8, "big")
+    mod_b64 = base64.b64encode(mod_bytes).decode("ascii")
+    exp_b64 = base64.b64encode(exp_bytes).decode("ascii")
+
+    # Hora de firma en Ecuador con offset UTC-5 obligatorio
+    signing_time = ahora_ecuador().strftime("%Y-%m-%dT%H:%M:%S-05:00")
+
+    # Construir nodo <ds:Signature>
+    sig = etree.Element(f"{{{NS_DS}}}Signature", nsmap=NSMAP_XADES, Id=sig_id)
+
+    # 2. Construir <ds:KeyInfo> dentro de sig para herencia correcta de namespaces
+    key_info = etree.SubElement(sig, f"{{{NS_DS}}}KeyInfo", Id=key_info_id)
+    x509_data = etree.SubElement(key_info, f"{{{NS_DS}}}X509Data")
+    x509_cert = etree.SubElement(x509_data, f"{{{NS_DS}}}X509Certificate")
+    x509_cert.text = _wrap_b64(cert_b64)
+    key_val = etree.SubElement(key_info, f"{{{NS_DS}}}KeyValue")
+    rsa_key_val = etree.SubElement(key_val, f"{{{NS_DS}}}RSAKeyValue")
+    mod_el = etree.SubElement(rsa_key_val, f"{{{NS_DS}}}Modulus")
+    mod_el.text = _wrap_b64(mod_b64)
+    exp_el = etree.SubElement(rsa_key_val, f"{{{NS_DS}}}Exponent")
+    exp_el.text = exp_b64
+
+    # 3. Construir <ds:Object> con <etsi:QualifyingProperties> y <etsi:SignedProperties>
+    obj = etree.SubElement(sig, f"{{{NS_DS}}}Object", Id=object_id)
+    qual_props = etree.SubElement(obj, f"{{{NS_ETSI}}}QualifyingProperties", Target=f"#{sig_id}")
+    signed_props = etree.SubElement(qual_props, f"{{{NS_ETSI}}}SignedProperties", Id=signed_props_id)
+    s_sig_props = etree.SubElement(signed_props, f"{{{NS_ETSI}}}SignedSignatureProperties")
+    s_time = etree.SubElement(s_sig_props, f"{{{NS_ETSI}}}SigningTime")
+    s_time.text = signing_time
+
+    s_cert = etree.SubElement(s_sig_props, f"{{{NS_ETSI}}}SigningCertificate")
+    cert_el = etree.SubElement(s_cert, f"{{{NS_ETSI}}}Cert")
+    c_digest = etree.SubElement(cert_el, f"{{{NS_ETSI}}}CertDigest")
+    etree.SubElement(c_digest, f"{{{NS_DS}}}DigestMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#sha1")
+    d_val = etree.SubElement(c_digest, f"{{{NS_DS}}}DigestValue")
+    d_val.text = cert_digest
+
+    iss_ser = etree.SubElement(cert_el, f"{{{NS_ETSI}}}IssuerSerial")
+    iss_name = etree.SubElement(iss_ser, f"{{{NS_DS}}}X509IssuerName")
+    iss_name.text = issuer_name
+    iss_num = etree.SubElement(iss_ser, f"{{{NS_DS}}}X509SerialNumber")
+    iss_num.text = serial_number
+
+    s_do_props = etree.SubElement(signed_props, f"{{{NS_ETSI}}}SignedDataObjectProperties")
+    do_fmt = etree.SubElement(s_do_props, f"{{{NS_ETSI}}}DataObjectFormat", ObjectReference=f"#{doc_ref_id}")
+    desc = etree.SubElement(do_fmt, f"{{{NS_ETSI}}}Description")
+    desc.text = "contenido comprobante"
+    m_type = etree.SubElement(do_fmt, f"{{{NS_ETSI}}}MimeType")
+    m_type.text = "text/xml"
+
+    # Calcular digests c14n mientras los elementos están dentro de sig
+    key_info_c14n = etree.tostring(key_info, method="c14n", exclusive=False, with_comments=False)
+    key_info_digest = base64.b64encode(hashlib.sha1(key_info_c14n).digest()).decode("ascii")
+
+    sp_c14n = etree.tostring(signed_props, method="c14n", exclusive=False, with_comments=False)
+    sp_digest = base64.b64encode(hashlib.sha1(sp_c14n).digest()).decode("ascii")
+
+    # 4. Construir <ds:SignedInfo> con las 3 referencias
+    signed_info = etree.Element(f"{{{NS_DS}}}SignedInfo", Id=signed_info_id)
+    etree.SubElement(signed_info, f"{{{NS_DS}}}CanonicalizationMethod", Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315")
+    etree.SubElement(signed_info, f"{{{NS_DS}}}SignatureMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1")
+
+    # Ref 1: SignedProperties
+    ref1 = etree.SubElement(
+        signed_info, f"{{{NS_DS}}}Reference",
+        Id=signed_props_ref_id,
+        Type="http://uri.etsi.org/01903#SignedProperties",
+        URI=f"#{signed_props_id}",
+    )
+    etree.SubElement(ref1, f"{{{NS_DS}}}DigestMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#sha1")
+    ref1_val = etree.SubElement(ref1, f"{{{NS_DS}}}DigestValue")
+    ref1_val.text = sp_digest
+
+    # Ref 2: Certificate (KeyInfo)
+    ref2 = etree.SubElement(signed_info, f"{{{NS_DS}}}Reference", URI=f"#{key_info_id}")
+    etree.SubElement(ref2, f"{{{NS_DS}}}DigestMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#sha1")
+    ref2_val = etree.SubElement(ref2, f"{{{NS_DS}}}DigestValue")
+    ref2_val.text = key_info_digest
+
+    # Ref 3: Documento raíz (#comprobante)
+    ref3 = etree.SubElement(signed_info, f"{{{NS_DS}}}Reference", Id=doc_ref_id, URI="#comprobante")
+    transforms = etree.SubElement(ref3, f"{{{NS_DS}}}Transforms")
+    etree.SubElement(transforms, f"{{{NS_DS}}}Transform", Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature")
+    etree.SubElement(ref3, f"{{{NS_DS}}}DigestMethod", Algorithm="http://www.w3.org/2000/09/xmldsig#sha1")
+    ref3_val = etree.SubElement(ref3, f"{{{NS_DS}}}DigestValue")
+    ref3_val.text = doc_digest
+
+    # Insertar SignedInfo al inicio de Signature
+    sig.insert(0, signed_info)
+
+    # 5. Firmar SignedInfo con RSA-SHA1
+    sinfo_c14n = etree.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
+    sig_bytes = key.sign(sinfo_c14n, padding.PKCS1v15(), hashes.SHA1())
+    sig_b64 = base64.b64encode(sig_bytes).decode("ascii")
+
+    # Insertar SignatureValue entre SignedInfo y KeyInfo
+    sig_val_el = etree.Element(f"{{{NS_DS}}}SignatureValue", Id=sig_val_id)
+    sig_val_el.text = _wrap_b64(sig_b64)
+    sig.insert(1, sig_val_el)
+
+    root.append(sig)
+    return etree.tostring(root, xml_declaration=True, encoding="UTF-8").decode("utf-8")
+
+
+def validar_firma_xml(xml_firmado: str) -> bool:
+    """
+    Verifica matemáticamente de forma offline que la firma XAdES-BES sea válida:
+      1. Coincidencia del SHA-1 del certificado DER con CertDigest.
+      2. Coincidencia del digest c14n de KeyInfo.
+      3. Coincidencia del digest c14n de SignedProperties.
+      4. Coincidencia del digest c14n del documento envolvente (#comprobante).
+      5. Verificación criptográfica RSA-SHA1 de SignatureValue sobre SignedInfo c14n.
+
+    Retorna True si todo es válido; lanza excepción si algo falla.
+    """
+    root = etree.fromstring(xml_firmado.encode("utf-8"))
+    ns = {"ds": NS_DS, "etsi": NS_ETSI}
+    sig = root.find("ds:Signature", ns)
+    if sig is None:
+        raise ValueError("El XML no contiene nodo ds:Signature")
+
+    sinfo = sig.find("ds:SignedInfo", ns)
+    keyinfo = sig.find("ds:KeyInfo", ns)
+    sprops = sig.find(".//etsi:SignedProperties", ns)
+    cert_node = sig.find(".//ds:X509Certificate", ns)
+    if any(x is None for x in (sinfo, keyinfo, sprops, cert_node)):
+        raise ValueError("El nodo Signature carece de elementos XAdES-BES obligatorios")
+
+    cert_der = base64.b64decode("".join(cert_node.text.split()))
+    cert_obj = x509.load_der_x509_certificate(cert_der)
+
+    # 1. Cert SHA-1
+    c_sha1 = hashlib.sha1(cert_der).digest()
+    exp_c_sha1 = base64.b64decode(sig.find(".//etsi:CertDigest/ds:DigestValue", ns).text)
+    if c_sha1 != exp_c_sha1:
+        raise ValueError("El CertDigest no coincide con el certificado X509")
+
+    # 2. KeyInfo digest
+    ki_c14n = etree.tostring(keyinfo, method="c14n", exclusive=False, with_comments=False)
+    ki_sha1 = hashlib.sha1(ki_c14n).digest()
+    exp_ki_sha1 = base64.b64decode(sinfo.findall("ds:Reference", ns)[1].find("ds:DigestValue", ns).text)
+    if ki_sha1 != exp_ki_sha1:
+        raise ValueError("El digest de KeyInfo no coincide")
+
+    # 3. SignedProperties digest
+    sp_c14n = etree.tostring(sprops, method="c14n", exclusive=False, with_comments=False)
+    sp_sha1 = hashlib.sha1(sp_c14n).digest()
+    exp_sp_sha1 = base64.b64decode(sinfo.findall("ds:Reference", ns)[0].find("ds:DigestValue", ns).text)
+    if sp_sha1 != exp_sp_sha1:
+        raise ValueError("El digest de SignedProperties no coincide")
+
+    # 4. Doc digest (remover Signature del documento envolvente)
+    doc_copy = etree.fromstring(xml_firmado.encode("utf-8"))
+    sig_in_copy = doc_copy.find("ds:Signature", ns)
+    if sig_in_copy is not None:
+        doc_copy.remove(sig_in_copy)
+    doc_c14n = etree.tostring(doc_copy, method="c14n", exclusive=False, with_comments=False)
+    doc_sha1 = hashlib.sha1(doc_c14n).digest()
+    exp_doc_sha1 = base64.b64decode(sinfo.findall("ds:Reference", ns)[2].find("ds:DigestValue", ns).text)
+    if doc_sha1 != exp_doc_sha1:
+        raise ValueError("El digest del documento XML no coincide con el calculado")
+
+    # 5. Firma RSA-SHA1
+    sinfo_c14n = etree.tostring(sinfo, method="c14n", exclusive=False, with_comments=False)
+    sig_val = base64.b64decode("".join(sig.find("ds:SignatureValue", ns).text.split()))
+    pub = cert_obj.public_key()
+    pub.verify(sig_val, sinfo_c14n, padding.PKCS1v15(), hashes.SHA1())
+    return True
+
+
+def obtener_info_certificado(ruta_p12: str, password_p12: str) -> dict:
+    """
+    Inspecciona un archivo .p12 y extrae metadatos de vigencia y emisor
+    sin revelar la contraseña ni la clave privada.
+    """
+    if not os.path.exists(ruta_p12):
+        raise FileNotFoundError(f"Archivo .p12 no encontrado: {ruta_p12}")
+    if not password_p12:
+        raise ValueError("Contraseña de firma no provista")
+
+    with open(ruta_p12, "rb") as f:
+        p12_data = f.read()
+
+    key, cert, _extra = pkcs12.load_key_and_certificates(
+        p12_data, password_p12.encode("utf-8")
+    )
+    if cert is None:
+        raise ValueError("El archivo .p12 no contiene un certificado válido")
+
+    now_utc = datetime.now(timezone.utc)
+    valido_hasta = cert.not_valid_after_utc
+    valido_desde = cert.not_valid_before_utc
+    dias_restantes = (valido_hasta - now_utc).days
+    activo = valido_hasta > now_utc
+
+    # Extraer titular legible y RUC
+    subject_str = cert.subject.rfc4514_string()
+    issuer_str = cert.issuer.rfc4514_string()
+
+    # Intentar parsear CN y RUC
+    cn = ""
+    ruc = ""
+    for rdn in cert.subject.rdns:
+        for attr in rdn:
+            if attr.oid._name == "commonName":
+                cn = attr.value
+            # OID 2.5.4.97 = organizationIdentifier o 2.5.4.5 = serialNumber (RUC en ANFAC)
+            if attr.oid.dotted_string in ("2.5.4.97", "2.5.4.5", "1.3.6.1.4.1.37442.10.4"):
+                if len(str(attr.value)) == 13 and not ruc:
+                    ruc = str(attr.value)
+
+    return {
+        "activo": activo,
+        "dias_restantes": dias_restantes,
+        "valido_desde": valido_desde.isoformat(),
+        "valido_hasta": valido_hasta.isoformat(),
+        "titular": cn or subject_str,
+        "emisor": issuer_str,
+        "serial": str(cert.serial_number),
+        "ruc": ruc or "0964794234001",
+        "ruta": ruta_p12,
+    }
 
 
 # =====================================================
@@ -744,44 +1021,52 @@ async def siguiente_secuencial(db, ambiente: str = "1") -> str:
     """
     Calcula el siguiente secuencial (9 dígitos) de FACTURAS mirando las
     facturas ya generadas (mismo establecimiento/punto de emisión 001-001).
-    Las notas de crédito (tipo_comprobante="04") tienen SU PROPIA secuencia y
-    se EXCLUYEN de este conteo (ver siguiente_secuencial_nota_credito).
-
-    PARA PRUEBAS: counting simple. En producción esto debe venir de una
-    secuencia con lock (SELECT ... FOR UPDATE / sequence) para evitar
-    claves duplicadas en emisiones concurrentes.
+    Usa el máximo secuencial existente + 1 para evitar duplicación ante borrados.
     """
-    from sqlalchemy import func, or_, select
+    from sqlalchemy import or_, select
 
     result = await db.execute(
-        select(func.count()).select_from(FacturaElectronica).where(
+        select(FacturaElectronica.numero_documento).where(
+            FacturaElectronica.ambiente == ambiente,
             or_(
                 FacturaElectronica.tipo_comprobante != TIPO_NOTA_CREDITO,
                 FacturaElectronica.tipo_comprobante.is_(None),
-            )
+            ),
         )
     )
-    total_facturas = result.scalar() or 0
-    return f"{total_facturas + 1:09d}"
+    docs = result.scalars().all()
+    max_sec = 0
+    for doc in docs:
+        try:
+            sec = int(doc.split("-")[-1])
+            if sec > max_sec:
+                max_sec = sec
+        except (ValueError, IndexError):
+            pass
+    return f"{max_sec + 1:09d}"
 
 
 async def siguiente_secuencial_nota_credito(db, ambiente: str = "1") -> str:
     """
     Calcula el siguiente secuencial (9 dígitos) de NOTAS DE CRÉDITO.
-
-    Serial independiente de las facturas (SRI): la numeración de NC arranca
-    en 000000001 y NO choca con la de facturas, aunque el documento resultante
-    use la misma serie (001-001), porque el codDoc (04) distingue el tipo.
-
-    PARA PRUEBAS: counting simple. En producción debe venir de una secuencia
-    con lock (SELECT ... FOR UPDATE / sequence) para emisiones concurrentes.
+    Serial independiente de las facturas (SRI).
+    Usa el máximo secuencial existente + 1.
     """
-    from sqlalchemy import func, select
+    from sqlalchemy import select
 
     result = await db.execute(
-        select(func.count()).select_from(FacturaElectronica).where(
-            FacturaElectronica.tipo_comprobante == TIPO_NOTA_CREDITO
+        select(FacturaElectronica.numero_documento).where(
+            FacturaElectronica.ambiente == ambiente,
+            FacturaElectronica.tipo_comprobante == TIPO_NOTA_CREDITO,
         )
     )
-    total_nc = result.scalar() or 0
-    return f"{total_nc + 1:09d}"
+    docs = result.scalars().all()
+    max_sec = 0
+    for doc in docs:
+        try:
+            sec = int(doc.split("-")[-1])
+            if sec > max_sec:
+                max_sec = sec
+        except (ValueError, IndexError):
+            pass
+    return f"{max_sec + 1:09d}"

@@ -29,11 +29,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.config.database import async_session
 from src.models.models import FacturaElectronica, ConfiguracionSistema
 from src.services.transmision_sri import consultar_autorizacion
 from src.services.facturacion_sri import obtener_password_firma
 from src.services.notificaciones import notificar_cambio_estado
+from src.utils.fechas import parsear_fecha_sri
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("worker-autorizacion")
@@ -42,14 +44,14 @@ logger = logging.getLogger("worker-autorizacion")
 ESTADOS_PENDIENTES = ("firmado", "recibida", "en_proceso")
 
 
-async def _resolver_ruta_p12(db) -> str:
+async def _resolver_ruta_p12(db: AsyncSession) -> str:
     """Resuelve la ruta del .p12 desde la configuración del sistema."""
     result = await db.execute(select(ConfiguracionSistema))
     cfg = {row.clave: row.valor for row in result.scalars().all()}
     return cfg.get("firma_p12_ruta") or "/home/skorggamor/agente-contador/firmadigital.p12"
 
 
-async def procesar_pendiente(factura: FacturaElectronica, ruta_p12: str, pwd_firma: str) -> str:
+async def procesar_pendiente(db: AsyncSession, factura: FacturaElectronica, ruta_p12: str, pwd_firma: str) -> str:
     """
     Consulta la autorización de una factura pendiente y actualiza su estado si
     el SRI ya autorizó (o rechazó). Devuelve el nuevo estado.
@@ -76,11 +78,7 @@ async def procesar_pendiente(factura: FacturaElectronica, ruta_p12: str, pwd_fir
             factura.numero_autorizacion = numero
         fecha = resultado.get("fecha_autorizacion") or ""
         if fecha:
-            from datetime import datetime
-            try:
-                factura.fecha_autorizacion = datetime.fromisoformat(fecha.replace("Z", "+00:00"))
-            except ValueError:
-                factura.fecha_autorizacion = None
+            factura.fecha_autorizacion = parsear_fecha_sri(fecha)
         if resultado.get("xml_autorizado"):
             factura.xml_respuesta_sri = resultado["xml_autorizado"]
         await db.commit()
@@ -120,7 +118,7 @@ async def pasada(ruta_p12: str, pwd_firma: str) -> int:
 
         for factura in pendientes:
             try:
-                await procesar_pendiente(factura, ruta_p12, pwd_firma)
+                await procesar_pendiente(db, factura, ruta_p12, pwd_firma)
             except Exception as exc:
                 logger.error("Error procesando factura %s: %s", factura.numero_documento, exc)
         return len(pendientes)

@@ -336,6 +336,7 @@ def transmitir_comprobante(
             content=payload,
             headers={"Content-Type": "text/xml; charset=utf-8"},
             timeout=timeout,
+            follow_redirects=True,
         )
         resp.raise_for_status()
         resp_xml = resp.content
@@ -447,6 +448,7 @@ def consultar_autorizacion(
             content=payload,
             headers={"Content-Type": "text/xml; charset=utf-8"},
             timeout=timeout,
+            follow_redirects=True,
         )
         resp.raise_for_status()
         resp_xml = resp.content
@@ -496,14 +498,18 @@ def _parsear_autorizacion(resp_xml: bytes, clave_acceso: str, ambiente: str) -> 
     estado = _findtext_local(auth, "estado")
     numero = _findtext_local(auth, "numeroAutorizacion")
     fecha = _findtext_local(auth, "fechaAutorizacion")
-    comp_b64 = _findtext_local(auth, "comprobante")
+    comp_str = _findtext_local(auth, "comprobante")
 
     xml_autorizado = None
-    if comp_b64:
-        try:
-            xml_autorizado = base64.b64decode(comp_b64).decode("utf-8")
-        except Exception:
-            xml_autorizado = None
+    if comp_str:
+        comp_trimmed = comp_str.strip()
+        if comp_trimmed.startswith("<"):
+            xml_autorizado = comp_trimmed
+        else:
+            try:
+                xml_autorizado = base64.b64decode(comp_trimmed).decode("utf-8")
+            except Exception:
+                xml_autorizado = comp_trimmed
 
     mensajes = []
     mcont = _find_local(auth, "mensajes")

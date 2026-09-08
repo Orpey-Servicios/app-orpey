@@ -464,3 +464,21 @@ async def test_transmitir_en_proceso_reintenta_y_envia(cliente_api, monkeypatch)
         fac = (await s.execute(select(FacturaElectronica).where(
             FacturaElectronica.id == fac_id))).scalar_one()
         assert fac.estado_sri == "autorizado"
+
+
+async def test_firma_info_endpoint(cliente_api):
+    """GET /api/facturacion/firma/info responde con metadatos del certificado."""
+    ac, sf, _ = cliente_api
+    from src.utils.auth import get_current_user
+    from src.models.models import Usuario, RolUsuario
+    admin = Usuario(id=1, username="admin", rol=RolUsuario.admin, password_hash="x")
+    app.dependency_overrides[get_current_user] = lambda: admin
+    try:
+        resp = await ac.get("/api/facturacion/firma/info")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "configurada" in data
+        assert "ruta" in data
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+

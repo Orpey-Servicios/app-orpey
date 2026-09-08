@@ -344,3 +344,22 @@ def test_serializar_respuesta():
     assert respuesta["clave_acceso"] == comp["clave_acceso"]
     assert respuesta["errores"] == []
     assert "<factura" in respuesta["xml_firmado"]
+
+
+def test_validar_firma_xml_xades_bes():
+    """Verifica que validar_firma_xml valide matemáticamente un XML firmado con XAdES-BES."""
+    from src.services.facturacion_sri import validar_firma_xml
+    xml_firmado = firmar_xml(_xml_simple(), RUTA_P12_PRUEBAS, "firma-pruebas-orpey-2026")
+    valido = validar_firma_xml(xml_firmado)
+    assert valido is True
+
+
+def test_obtener_info_certificado_metadatos():
+    """Verifica que obtener_info_certificado extraiga metadatos de vigencia y titular."""
+    from src.services.facturacion_sri import obtener_info_certificado
+    info = obtener_info_certificado(RUTA_P12_PRUEBAS, "firma-pruebas-orpey-2026")
+    assert info["activo"] is True
+    assert "titular" in info
+    assert "valido_desde" in info
+    assert "valido_hasta" in info
+    assert info["dias_restantes"] > 0

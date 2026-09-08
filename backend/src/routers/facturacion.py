@@ -25,7 +25,7 @@ from decimal import Decimal
 from io import BytesIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, File, UploadFile, Form
 from fastapi.responses import Response
 from pydantic import BaseModel
 from reportlab.lib import colors
@@ -40,6 +40,7 @@ from reportlab.platypus import (
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
+from cryptography.hazmat.primitives.serialization import pkcs12
 
 from src.config.database import get_db
 from src.models.models import (
@@ -57,6 +58,7 @@ from src.services.facturacion_sri import (
     siguiente_secuencial,
     siguiente_secuencial_nota_credito,
     obtener_password_firma,
+    obtener_info_certificado,
 )
 from src.services.transmision_sri import (
     ErrorTransmisionSRI,
@@ -64,6 +66,7 @@ from src.services.transmision_sri import (
     transmitir_y_autorizar,
 )
 from src.utils.auth import get_current_user
+from src.utils.fechas import parsear_fecha_sri, ahora_ecuador_naive
 
 router = APIRouter(
     prefix="/api/facturacion",
@@ -813,13 +816,7 @@ async def consultar_estado_autorizacion(
         factura.numero_autorizacion = resultado.get("numero_autorizacion")
         if resultado.get("xml_autorizado"):
             factura.xml_respuesta_sri = resultado["xml_autorizado"]
-        if resultado.get("fecha_autorizacion"):
-            try:
-                factura.fecha_autorizacion = datetime.fromisoformat(
-                    resultado["fecha_autorizacion"].replace("Z", "+00:00")
-                )
-            except ValueError:
-                factura.fecha_autorizacion = None
+        factura.fecha_autorizacion = parsear_fecha_sri(resultado.get("fecha_autorizacion"))
     elif estado == "EN PROCESO":
         pass  # No cambiar nada, aún procesando
     else:
@@ -953,14 +950,7 @@ async def transmitir_factura(
         factura.xml_respuesta_sri = (
             autorizacion.get("xml_autorizado") or factura.xml_firmado
         )
-        if autorizacion.get("fecha_autorizacion"):
-            from datetime import datetime
-            try:
-                factura.fecha_autorizacion = datetime.fromisoformat(
-                    autorizacion["fecha_autorizacion"].replace("Z", "+00:00")
-                )
-            except ValueError:
-                factura.fecha_autorizacion = None
+        factura.fecha_autorizacion = parsear_fecha_sri(autorizacion.get("fecha_autorizacion"))
     elif estado_final == "DEVUELTA":
         factura.estado_sri = "devuelta"
         factura.xml_respuesta_sri = _formatear_errores(errores)
@@ -1025,13 +1015,7 @@ def _aplicar_resultado_transmision(
         comprobante.xml_respuesta_sri = (
             autorizacion.get("xml_autorizado") or comprobante.xml_firmado
         )
-        if autorizacion.get("fecha_autorizacion"):
-            try:
-                comprobante.fecha_autorizacion = datetime.fromisoformat(
-                    autorizacion["fecha_autorizacion"].replace("Z", "+00:00")
-                )
-            except ValueError:
-                comprobante.fecha_autorizacion = None
+        comprobante.fecha_autorizacion = parsear_fecha_sri(autorizacion.get("fecha_autorizacion"))
     elif estado_final == "DEVUELTA":
         comprobante.estado_sri = "devuelta"
         comprobante.xml_respuesta_sri = _formatear_errores(errores)
@@ -1287,3 +1271,146 @@ async def anular_factura(
         "factura_original": _serializar(factura),
         "transmision": transmision,
     }
+
+
+# =====================================================
+# GESTIÓN DE FIRMA ELECTRÓNICA SRI (.p12)
+# =====================================================
+
+@router.get(
+    "/firma/info",
+    summary="Información del certificado digital SRI",
+    description="Devuelve estado, titular, emisor, fechas de vigencia y días restantes del certificado .p12.",
+)
+async def obtener_info_firma_endpoint(
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    if current_user.rol != RolUsuario.admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden consultar el certificado digital")
+
+    result = await db.execute(select(ConfiguracionSistema))
+    cfg_rows = result.scalars().all()
+    cfg = {row.clave: row.valor for row in cfg_rows}
+    ruta_p12 = cfg.get("firma_p12_ruta") or FIRMA_P12_DEFAULT
+    password_p12 = obtener_password_firma(ruta_p12)
+
+    if not os.path.exists(ruta_p12):
+        return {
+            "configurada": False,
+            "activo": False,
+            "error": f"Archivo de certificado no encontrado en: {ruta_p12}",
+            "ruta": ruta_p12,
+        }
+
+    if not password_p12:
+        return {
+            "configurada": True,
+            "activo": False,
+            "error": "Contraseña de firma no configurada",
+            "ruta": ruta_p12,
+        }
+
+    try:
+        info = obtener_info_certificado(ruta_p12, password_p12)
+        info["configurada"] = True
+        return info
+    except Exception as exc:
+        return {
+            "configurada": True,
+            "activo": False,
+            "error": str(exc),
+            "ruta": ruta_p12,
+        }
+
+
+@router.post(
+    "/firma/upload",
+    summary="Subir certificado digital .p12 para facturación SRI",
+    description="Sube un archivo .p12 y su contraseña, valida que sea un certificado válido y lo almacena.",
+)
+async def subir_firma_digital(
+    archivo: UploadFile = File(...),
+    password: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user),
+):
+    if current_user.rol != RolUsuario.admin:
+        raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar la firma digital")
+
+    if not archivo.filename or not archivo.filename.lower().endswith((".p12", ".pfx")):
+        raise HTTPException(status_code=400, detail="El archivo debe tener extensión .p12 o .pfx")
+
+    contenido = await archivo.read()
+    if not contenido:
+        raise HTTPException(status_code=400, detail="El archivo subido está vacío")
+
+    # Validar PKCS#12 y contraseña en memoria antes de tocar el disco
+    try:
+        key, cert, _extra = pkcs12.load_key_and_certificates(
+            contenido, password.strip().encode("utf-8")
+        )
+        if cert is None:
+            raise ValueError("El archivo no contiene un certificado X.509 válido")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No se pudo abrir el certificado .p12. Verifique la contraseña: {exc}",
+        )
+
+    # Determinar ruta de destino
+    if os.path.isdir("/app/firma"):
+        directorio_destino = "/app/firma"
+    else:
+        directorio_destino = os.path.dirname(FIRMA_P12_DEFAULT)
+        if not os.path.exists(directorio_destino):
+            directorio_destino = os.path.abspath("firma")
+            os.makedirs(directorio_destino, exist_ok=True)
+
+    ruta_p12_destino = os.path.join(directorio_destino, "firmadigital.p12")
+    ruta_pass_destino = os.path.join(directorio_destino, ".firma_p12.pass")
+
+    try:
+        with open(ruta_p12_destino, "wb") as f:
+            f.write(contenido)
+
+        with open(ruta_pass_destino, "w", encoding="utf-8") as f:
+            f.write(password.strip())
+        try:
+            os.chmod(ruta_pass_destino, 0o600)
+        except OSError:
+            pass
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al guardar los archivos de firma en disco: {exc}",
+        )
+
+    # Actualizar o insertar en configuracion_sistema
+    result = await db.execute(
+        select(ConfiguracionSistema).where(ConfiguracionSistema.clave == "firma_p12_ruta")
+    )
+    cfg_firma = result.scalar_one_or_none()
+    if cfg_firma:
+        cfg_firma.valor = ruta_p12_destino
+    else:
+        cfg_firma = ConfiguracionSistema(
+            clave="firma_p12_ruta",
+            valor=ruta_p12_destino,
+            descripcion="Ruta al archivo de firma electrónica .p12 para SRI",
+        )
+        db.add(cfg_firma)
+
+    try:
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al guardar la configuración en la base de datos: {exc}",
+        )
+
+    info = obtener_info_certificado(ruta_p12_destino, password.strip())
+    info["configurada"] = True
+    info["mensaje"] = "Certificado digital instalado y validado exitosamente"
+    return info
